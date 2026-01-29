@@ -1,10 +1,9 @@
+import { CLOSING_DAY, START_DAY } from './Constants';
+
 export interface SettlementPeriod {
   startDate: Date;
   endDate: Date;
 }
-
-const CLOSING_DAY = 15;
-const START_DAY = 16;
 
 /**
  * 15日締めサイクルに基づいて精算期間を計算します。
