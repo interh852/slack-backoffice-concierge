@@ -9,7 +9,7 @@
     "forceConsistentCasingInFileNames": true,
     "outDir": "dist",
     "rootDir": "src",
-    "types": ["google-apps-script", "jest"]
+    "types": ["google-apps-script", "jest", "node"]
   },
   "include": ["src/**/*.ts"]
 }
