@@ -34,7 +34,7 @@ describe('CalendarService', () => {
     isAllDayEvent: () => false,
   });
 
-  it('期間内の「出社」イベントの日数を正しくカウントできるべき', () => {
+  it('期間内の「出社」イベントの日数と日付リストを正しく取得できるべき', () => {
     const startDate = new Date(2026, 0, 16); // 1月16日
     const endDate = new Date(2026, 1, 15);   // 2月15日
 
@@ -46,11 +46,12 @@ describe('CalendarService', () => {
 
     mockGetEvents.mockReturnValue(events);
 
-    const count = service.countCommuteDays(startDate, endDate);
+    const summary = service.getCommuteSummary(startDate, endDate);
 
     expect(mockGetDefaultCalendar).toHaveBeenCalled();
     expect(mockGetEvents).toHaveBeenCalledWith(startDate, endDate);
-    expect(count).toBe(2);
+    expect(summary.count).toBe(2);
+    expect(summary.dates).toEqual(['2026-01-20', '2026-01-25']);
   });
 
   it('同日に複数の「出社」イベントがあっても1日としてカウントするべき', () => {
@@ -64,9 +65,10 @@ describe('CalendarService', () => {
 
     mockGetEvents.mockReturnValue(events);
 
-    const count = service.countCommuteDays(startDate, endDate);
+    const summary = service.getCommuteSummary(startDate, endDate);
 
-    expect(count).toBe(1);
+    expect(summary.count).toBe(1);
+    expect(summary.dates).toEqual(['2026-01-20']);
   });
 
   it('「出社」という文字列を含まないイベントは無視するべき', () => {
@@ -80,8 +82,9 @@ describe('CalendarService', () => {
 
     mockGetEvents.mockReturnValue(events);
 
-    const count = service.countCommuteDays(startDate, endDate);
+    const summary = service.getCommuteSummary(startDate, endDate);
 
-    expect(count).toBe(0);
+    expect(summary.count).toBe(0);
+    expect(summary.dates).toEqual([]);
   });
 });
