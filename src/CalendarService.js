@@ -13,20 +13,23 @@ function CalendarService() {}
  * @param {Date} endDate 期間終了日
  * @returns {Object} { count: number, dates: string[] }
  */
-CalendarService.prototype.getCommuteSummary = function(startDate, endDate) {
+CalendarService.prototype.getCommuteSummary = function (startDate, endDate) {
   var calendar = CalendarApp.getDefaultCalendar();
   var events = calendar.getEvents(startDate, endDate);
-  
+
   var commuteDates = {};
 
   var keyword = typeof COMMUTE_KEYWORD !== 'undefined' ? COMMUTE_KEYWORD : '出社';
 
-  events.forEach(function(event) {
+  events.forEach(function (event) {
     if (event.getTitle().indexOf(keyword) !== -1) {
       var date = event.getStartTime();
-      var dateString = date.getFullYear() + '-' + 
-                       (date.getMonth() + 1).toString().padStart(2, '0') + '-' + 
-                       date.getDate().toString().padStart(2, '0');
+      var dateString =
+        date.getFullYear() +
+        '-' +
+        (date.getMonth() + 1).toString().padStart(2, '0') +
+        '-' +
+        date.getDate().toString().padStart(2, '0');
       commuteDates[dateString] = true;
     }
   });
@@ -35,7 +38,7 @@ CalendarService.prototype.getCommuteSummary = function(startDate, endDate) {
 
   return {
     count: sortedDates.length,
-    dates: sortedDates
+    dates: sortedDates,
   };
 };
 

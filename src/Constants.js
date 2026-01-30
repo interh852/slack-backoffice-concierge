@@ -24,6 +24,6 @@ if (typeof module !== 'undefined') {
     COMMUTE_KEYWORD,
     COMMUTE_UNIT_PRICE,
     SPREADSHEET_ID,
-    SHEET_NAME
+    SHEET_NAME,
   };
 }

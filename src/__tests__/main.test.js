@@ -10,7 +10,7 @@ const PeriodCalculator = require('../PeriodCalculator');
 // CalendarApp モック
 const mockGetEvents = jest.fn();
 const mockGetDefaultCalendar = jest.fn().mockReturnValue({
-  getEvents: mockGetEvents
+  getEvents: mockGetEvents,
 });
 global.CalendarApp = {
   getDefaultCalendar: mockGetDefaultCalendar,
@@ -52,7 +52,7 @@ describe('Main Script Integration', () => {
   it('メインフローが正しく連携して実行されるべき', () => {
     const mockEmail = 'test@example.com';
     const mockDate = new Date(2026, 0, 29); // 1月29日 -> 期間: 2025/12/16 - 2026/01/15
-    
+
     // テストデータ
     // 期間内のイベントを用意
     const events = [
@@ -67,26 +67,26 @@ describe('Main Script Integration', () => {
 
     // GAS API が正しく呼ばれたか検証
     expect(mockGetActiveUser).toHaveBeenCalled();
-    
+
     // カレンダー取得
     expect(mockGetDefaultCalendar).toHaveBeenCalled();
     expect(mockGetEvents).toHaveBeenCalledWith(
       new Date(2025, 11, 16), // startDate
-      new Date(2026, 0, 15)   // endDate
+      new Date(2026, 0, 15) // endDate
     );
 
     // スプレッドシート保存
     expect(mockOpenById).toHaveBeenCalledWith(expect.any(String)); // IDは定数なのでanyで
     expect(mockGetSheetByName).toHaveBeenCalledWith(expect.any(String));
-    
+
     expect(mockAppendRow).toHaveBeenCalledWith([
       mockDate,
       mockEmail,
       '2026-01', // targetMonth
-      1000,      // unitPrice
-      2,         // daysCount
-      2000,      // totalAmount
-      '2026-01-10, 2026-01-12' // dateList
+      1000, // unitPrice
+      2, // daysCount
+      2000, // totalAmount
+      '2026-01-10, 2026-01-12', // dateList
     ]);
   });
 });

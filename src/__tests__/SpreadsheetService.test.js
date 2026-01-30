@@ -31,7 +31,7 @@ describe('SpreadsheetService', () => {
       unitPrice: 1000,
       daysCount: 5,
       totalAmount: 5000,
-      dateList: '2026/01/20, 2026/01/21'
+      dateList: '2026/01/20, 2026/01/21',
     };
 
     service.saveRecord(record);
@@ -45,7 +45,7 @@ describe('SpreadsheetService', () => {
       record.unitPrice,
       record.daysCount,
       record.totalAmount,
-      record.dateList
+      record.dateList,
     ]);
   });
 });
