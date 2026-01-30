@@ -3,17 +3,5 @@
   "dependencies": {
   },
   "exceptionLogging": "STACKDRIVER",
-  "runtimeVersion": "V8",
-  "chat": {
-    "addToSpaceFallbackMessage": "Thank you for adding me to this space!",
-    "onAddToSpace": {
-      "functionName": "onAddToSpace"
-    },
-    "onMessage": {
-      "functionName": "onMessage"
-    },
-    "onRemoveFromSpace": {
-      "functionName": "onRemoveFromSpace"
-    }
-  }
+  "runtimeVersion": "V8"
 }

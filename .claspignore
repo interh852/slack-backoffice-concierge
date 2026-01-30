@@ -1,5 +1,2 @@
-**/**
-!appsscript.json
-!src/**/*
-src/__tests__/**
+**/__tests__/**
 **/*.test.ts
