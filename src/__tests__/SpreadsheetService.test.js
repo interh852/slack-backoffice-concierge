@@ -1,6 +1,6 @@
-import { SpreadsheetService, CommuteRecord } from '../SpreadsheetService';
+const { SpreadsheetService } = require('../SpreadsheetService');
 
-// SpreadsheetAppのモック
+// モックの定義
 const mockAppendRow = jest.fn();
 const mockGetSheetByName = jest.fn().mockReturnValue({
   appendRow: mockAppendRow,
@@ -9,12 +9,12 @@ const mockOpenById = jest.fn().mockReturnValue({
   getSheetByName: mockGetSheetByName,
 });
 
-(global as any).SpreadsheetApp = {
+global.SpreadsheetApp = {
   openById: mockOpenById,
 };
 
 describe('SpreadsheetService', () => {
-  let service: SpreadsheetService;
+  let service;
   const SPREADSHEET_ID = 'test-id';
   const SHEET_NAME = 'test-sheet';
 
@@ -24,7 +24,7 @@ describe('SpreadsheetService', () => {
   });
 
   it('レコードを正しくスプレッドシートに追加できるべき', () => {
-    const record: CommuteRecord = {
+    const record = {
       applicationDate: new Date(2026, 0, 29),
       userEmail: 'taro.tanaka@example.com',
       targetMonth: '2026-01',
