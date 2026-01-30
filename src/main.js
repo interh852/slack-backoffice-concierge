@@ -13,23 +13,23 @@ if (typeof require !== 'undefined') {
  */
 function calculateAndSaveCommuteExpenses(baseDate) {
   if (!baseDate) baseDate = new Date();
-  
+
   var userEmail = Session.getActiveUser().getEmail();
-  
+
   // 1. 精算期間の計算
   var period = getSettlementPeriod(baseDate);
-  
+
   // 2. カレンダーから集計
   var calendarService = new CalendarService();
   var summary = calendarService.getCommuteSummary(period.startDate, period.endDate);
-  
+
   // 3. 金額計算
   var totalAmount = summary.count * COMMUTE_UNIT_PRICE;
-  
+
   var targetYear = period.endDate.getFullYear();
   var targetMonth = period.endDate.getMonth() + 1;
   var targetMonthStr = targetYear + '-' + targetMonth.toString().padStart(2, '0');
-  
+
   // 4. 保存
   var spreadsheetService = new SpreadsheetService(SPREADSHEET_ID, SHEET_NAME);
   spreadsheetService.saveRecord({
@@ -39,7 +39,7 @@ function calculateAndSaveCommuteExpenses(baseDate) {
     unitPrice: COMMUTE_UNIT_PRICE,
     daysCount: summary.count,
     totalAmount: totalAmount,
-    dateList: summary.dates.join(', ')
+    dateList: summary.dates.join(', '),
   });
 }
 

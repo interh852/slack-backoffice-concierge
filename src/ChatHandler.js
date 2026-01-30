@@ -16,13 +16,13 @@ function onMessage(event) {
       // いったん「GAS環境ではグローバル関数 calculateAndSaveCommuteExpenses がある」前提で書くならこう：
       calculateAndSaveCommuteExpenses();
     }
-    
+
     return {
-      text: '✅ 交通費の申請を受け付けました！カレンダーの「出社」予定を集計してスプレッドシートに保存しました。'
+      text: '✅ 交通費の申請を受け付けました！カレンダーの「出社」予定を集計してスプレッドシートに保存しました。',
     };
   } catch (error) {
     return {
-      text: '❌ エラーが発生しました: ' + (error.message || String(error))
+      text: '❌ エラーが発生しました: ' + (error.message || String(error)),
     };
   }
 }
@@ -32,7 +32,7 @@ function onMessage(event) {
  */
 function onAddToSpace(event) {
   return {
-    text: 'こんにちは！交通費精算コンシェルジュです。「交通費」と話しかけると、自動でカレンダーを集計して申請します。'
+    text: 'こんにちは！交通費精算コンシェルジュです。「交通費」と話しかけると、自動でカレンダーを集計して申請します。',
   };
 }
 

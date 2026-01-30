@@ -4,5 +4,5 @@ module.exports = {
   moduleFileExtensions: ['js', 'json', 'node'],
   roots: ['<rootDir>/src'],
   testMatch: ['**/__tests__/**/*.js', '**/?(*.)+(spec|test).js'],
-  transform: {}
+  transform: {},
 };

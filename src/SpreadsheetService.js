@@ -12,10 +12,10 @@ function SpreadsheetService(spreadsheetId, sheetName) {
  * スプレッドシートにレコードを保存します。
  * @param {Object} record 保存するレコード
  */
-SpreadsheetService.prototype.saveRecord = function(record) {
+SpreadsheetService.prototype.saveRecord = function (record) {
   var spreadsheet = SpreadsheetApp.openById(this.spreadsheetId);
   var sheet = spreadsheet.getSheetByName(this.sheetName);
-  
+
   if (!sheet) {
     throw new Error('Sheet "' + this.sheetName + '" not found');
   }
@@ -27,7 +27,7 @@ SpreadsheetService.prototype.saveRecord = function(record) {
     record.unitPrice,
     record.daysCount,
     record.totalAmount,
-    record.dateList
+    record.dateList,
   ]);
 };
 
