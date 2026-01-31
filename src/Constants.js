@@ -13,8 +13,8 @@ var COMMUTE_KEYWORD = '出社';
 var COMMUTE_UNIT_PRICE = 1000;
 
 // スプレッドシート設定
-var SPREADSHEET_ID = 'YOUR_SPREADSHEET_ID_HERE';
-var SHEET_NAME = 'CommuteExpenses';
+var SPREADSHEET_ID = '1La-fkJ0eSCmqC7DYaMATyCSXt2gRQUUqvTROH2mkdgM';
+var SHEET_NAME = 'シート1';
 
 // Node.js環境でのテスト用
 if (typeof module !== 'undefined') {
