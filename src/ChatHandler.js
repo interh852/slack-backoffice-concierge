@@ -37,21 +37,26 @@ function onMessage(event) {
   }
 
   try {
+    var result;
     // 処理実行
     if (typeof main !== 'undefined' && main.calculateAndSaveCommuteExpenses) {
       console.log('Calling main.calculateAndSaveCommuteExpenses (Node env)');
-      main.calculateAndSaveCommuteExpenses();
+      result = main.calculateAndSaveCommuteExpenses();
     } else {
       console.log('Calling calculateAndSaveCommuteExpenses (GAS env)');
-      calculateAndSaveCommuteExpenses();
+      result = calculateAndSaveCommuteExpenses();
     }
 
-    console.log('Calculation completed successfully');
+    console.log('Calculation completed successfully', result);
     
     // 非同期でメッセージ送信
     if (spaceName) {
+      var message = '✅ 交通費の申請を受け付けました！\n\n' +
+                    '出社日: ' + (result.dates ? result.dates.join(', ') : 'なし') + ' (' + result.daysCount + '日間)\n' +
+                    '交通費: ' + result.totalAmount + '円';
+
       Chat.Spaces.Messages.create(
-        { text: '✅ 交通費の申請を受け付けました！カレンダーの「出社」予定を集計してスプレッドシートに保存しました。' },
+        { text: message },
         spaceName
       );
     }
