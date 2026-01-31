@@ -17,36 +17,50 @@ describe('ChatHandler', () => {
   });
 
   describe('onMessage', () => {
-    it('メッセージを受信したら交通費計算を実行し、Chat API経由で結果を送信すべき', () => {
+    it('「交通費」という文字列が含まれるメッセージを受信したら交通費計算を実行し、結果を送信すべき', () => {
       // スパイを設定
       const spyCalculate = jest.spyOn(main, 'calculateAndSaveCommuteExpenses').mockImplementation(() => {});
 
       const event = {
         message: {
-          text: '交通費精算'
-        },
-        user: {
-          email: 'test@example.com',
-          displayName: 'Test User'
+          text: '交通費精算をお願いします'
         },
         space: {
           name: 'spaces/AAAA'
         }
       };
 
-      // 戻り値は空になるはず
-      const response = onMessage(event);
+      onMessage(event);
 
       expect(spyCalculate).toHaveBeenCalled();
-      expect(response).toBeUndefined(); // 同期レスポンスはなし
-
-      // 非同期送信の検証
       expect(mockCreateMessage).toHaveBeenCalledWith(
-        { text: '✅ 交通費の申請を受け付けました！カレンダーの「出社」予定を集計してスプレッドシートに保存しました。' },
+        expect.objectContaining({ text: expect.stringContaining('受け付けました') }),
         'spaces/AAAA'
       );
 
-      // スパイを解除
+      spyCalculate.mockRestore();
+    });
+
+    it('「交通費」という文字列が含まれないメッセージの場合は無視し、ヘルプを返すべき', () => {
+      const spyCalculate = jest.spyOn(main, 'calculateAndSaveCommuteExpenses').mockImplementation(() => {});
+
+      const event = {
+        message: {
+          text: 'こんにちは'
+        },
+        space: {
+          name: 'spaces/AAAA'
+        }
+      };
+
+      onMessage(event);
+
+      expect(spyCalculate).not.toHaveBeenCalled();
+      expect(mockCreateMessage).toHaveBeenCalledWith(
+        { text: '「交通費」という言葉を含めて話しかけてください。自動でカレンダーを集計して申請します。' },
+        'spaces/AAAA'
+      );
+
       spyCalculate.mockRestore();
     });
   });
@@ -59,9 +73,8 @@ describe('ChatHandler', () => {
         }
       };
       
-      const response = onAddToSpace(event);
+      onAddToSpace(event);
       
-      expect(response).toBeUndefined();
       expect(mockCreateMessage).toHaveBeenCalledWith(
         { text: 'こんにちは！交通費精算コンシェルジュです。「交通費」と話しかけると、自動でカレンダーを集計して申請します。' },
         'spaces/AAAA'

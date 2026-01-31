@@ -9,6 +9,9 @@ var START_DAY = 16;
 // カレンダー検索に関する定数
 var COMMUTE_KEYWORD = '出社';
 
+// チャットボットに関する定数
+var CHAT_KEYWORD = '交通費';
+
 // 交通費計算に関する定数
 var COMMUTE_UNIT_PRICE = 1000;
 
@@ -22,6 +25,7 @@ if (typeof module !== 'undefined') {
     CLOSING_DAY,
     START_DAY,
     COMMUTE_KEYWORD,
+    CHAT_KEYWORD,
     COMMUTE_UNIT_PRICE,
     SPREADSHEET_ID,
     SHEET_NAME,

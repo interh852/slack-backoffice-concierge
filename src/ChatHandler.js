@@ -1,5 +1,6 @@
 if (typeof require !== 'undefined') {
   var main = require('./main');
+  var { CHAT_KEYWORD } = require('./Constants');
 }
 
 /**
@@ -8,7 +9,14 @@ if (typeof require !== 'undefined') {
 function onMessage(event) {
   console.log('onMessage called with event:', JSON.stringify(event));
   
-  // スペース名を安全に取得
+  // メッセージテキストとスペース名を取得
+  var messageText = "";
+  if (event.message && event.message.text) {
+    messageText = event.message.text;
+  } else if (event.chat && event.chat.messagePayload && event.chat.messagePayload.message) {
+    messageText = event.chat.messagePayload.message.text;
+  }
+
   var spaceName = "";
   if (event.space) {
     spaceName = event.space.name;
@@ -16,6 +24,18 @@ function onMessage(event) {
     spaceName = event.chat.messagePayload.space.name;
   }
   
+  // キーワードチェック
+  var keyword = typeof CHAT_KEYWORD !== 'undefined' ? CHAT_KEYWORD : '交通費';
+  if (messageText.indexOf(keyword) === -1) {
+    if (spaceName) {
+      Chat.Spaces.Messages.create(
+        { text: '「' + keyword + '」という言葉を含めて話しかけてください。自動でカレンダーを集計して申請します。' },
+        spaceName
+      );
+    }
+    return;
+  }
+
   try {
     // 処理実行
     if (typeof main !== 'undefined' && main.calculateAndSaveCommuteExpenses) {
@@ -34,8 +54,6 @@ function onMessage(event) {
         { text: '✅ 交通費の申請を受け付けました！カレンダーの「出社」予定を集計してスプレッドシートに保存しました。' },
         spaceName
       );
-    } else {
-      console.error('Space name not found in event object');
     }
     
   } catch (error) {
@@ -79,5 +97,5 @@ function onRemovedFromSpace(event) {
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { onMessage, onAddedToSpace };
+  module.exports = { onMessage, onAddToSpace: onAddedToSpace };
 }
