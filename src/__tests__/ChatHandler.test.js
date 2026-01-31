@@ -17,9 +17,13 @@ describe('ChatHandler', () => {
   });
 
   describe('onMessage', () => {
-    it('「交通費」という文字列が含まれるメッセージを受信したら交通費計算を実行し、結果を送信すべき', () => {
-      // スパイを設定
-      const spyCalculate = jest.spyOn(main, 'calculateAndSaveCommuteExpenses').mockImplementation(() => {});
+    it('「交通費」という文字列が含まれるメッセージを受信したら交通費計算を実行し、詳細な結果を送信すべき', () => {
+      // スパイを設定し、戻り値を設定
+      const spyCalculate = jest.spyOn(main, 'calculateAndSaveCommuteExpenses').mockReturnValue({
+        daysCount: 2,
+        totalAmount: 2000,
+        dates: ['2026-01-10', '2026-01-12']
+      });
 
       const event = {
         message: {
@@ -33,8 +37,18 @@ describe('ChatHandler', () => {
       onMessage(event);
 
       expect(spyCalculate).toHaveBeenCalled();
+      
+      // 詳細なメッセージが含まれているか検証
       expect(mockCreateMessage).toHaveBeenCalledWith(
-        expect.objectContaining({ text: expect.stringContaining('受け付けました') }),
+        expect.objectContaining({ 
+          text: expect.stringContaining('出社日: 2026-01-10, 2026-01-12') 
+        }),
+        'spaces/AAAA'
+      );
+      expect(mockCreateMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ 
+          text: expect.stringContaining('交通費: 2000円') 
+        }),
         'spaces/AAAA'
       );
 

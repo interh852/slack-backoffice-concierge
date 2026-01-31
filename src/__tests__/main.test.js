@@ -52,6 +52,8 @@ describe('Main Script Integration', () => {
   it('メインフローが正しく連携して実行されるべき', () => {
     const mockEmail = 'test@example.com';
     const mockDate = new Date(2026, 0, 29); // 1月29日 -> 期間: 2025/12/16 - 2026/01/15
+    const mockDaysCount = 2;
+    const mockDates = ['2026-01-10', '2026-01-12'];
 
     // テストデータ
     // 期間内のイベントを用意
@@ -61,11 +63,18 @@ describe('Main Script Integration', () => {
     ];
 
     mockGetEmail.mockReturnValue(mockEmail);
-    mockGetEvents.mockReturnValue(events);
+    // 保険のモックも設定（もし本物が呼ばれたら空を返すようにしてエラー回避）
+    mockGetEvents.mockReturnValue(events); // events を返すように修正
 
-    main.calculateAndSaveCommuteExpenses(mockDate);
+    const result = main.calculateAndSaveCommuteExpenses(mockDate);
 
-    // GAS API が正しく呼ばれたか検証
+    // 戻り値の検証
+    expect(result).toEqual({
+      daysCount: mockDaysCount,
+      totalAmount: 2000, // 1000 * 2
+      dates: mockDates
+    });
+
     expect(mockGetActiveUser).toHaveBeenCalled();
 
     // カレンダー取得

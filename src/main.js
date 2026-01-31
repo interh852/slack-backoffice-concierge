@@ -9,6 +9,7 @@ if (typeof require !== 'undefined') {
 /**
  * 交通費を計算してスプレッドシートに保存するメイン関数
  * @param {Date} baseDate 基準日
+ * @returns {Object} 計算結果 { daysCount, totalAmount, dates }
  */
 function calculateAndSaveCommuteExpenses(baseDate) {
   console.log('calculateAndSaveCommuteExpenses started');
@@ -46,6 +47,12 @@ function calculateAndSaveCommuteExpenses(baseDate) {
     dateList: summary.dates.join(', ')
   });
   console.log('Saved successfully');
+
+  return {
+    daysCount: summary.count,
+    totalAmount: totalAmount,
+    dates: summary.dates
+  };
 }
 
 if (typeof module !== 'undefined') {
