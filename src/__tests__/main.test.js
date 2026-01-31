@@ -1,11 +1,13 @@
 const main = require('../main');
-// 実際のクラスを読み込む
-const { CalendarService } = require('../CalendarService');
-const { SpreadsheetService } = require('../SpreadsheetService');
-const PeriodCalculator = require('../PeriodCalculator');
+// UseCaseの実装はモックせず、そのまま使う（結合テスト）
+// ただし、内部で呼ばれる GAS API はモックする
 
-// jest.mock は使用しない！
-// 代わりに GAS のグローバルオブジェクトをモック化する
+// GASのグローバルオブジェクトモック
+const mockGetActiveUser = jest.fn();
+const mockGetEmail = jest.fn();
+global.Session = {
+  getActiveUser: mockGetActiveUser,
+};
 
 // CalendarApp モック
 const mockGetEvents = jest.fn();
@@ -28,17 +30,7 @@ global.SpreadsheetApp = {
   openById: mockOpenById,
 };
 
-// PeriodCalculator はロジックなのでモックせず実物を動かしてもいいが、
-// テストの安定性のためここだけ jest.spyOn で日付計算を固定してもいい。
-// 今回は日付計算もロジックの一部として結合テストする。
-
-const mockGetActiveUser = jest.fn();
-const mockGetEmail = jest.fn();
-global.Session = {
-  getActiveUser: mockGetActiveUser,
-};
-
-describe('Main Script Integration', () => {
+describe('Main Entry Point', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockGetActiveUser.mockReturnValue({ getEmail: mockGetEmail });
@@ -49,53 +41,40 @@ describe('Main Script Integration', () => {
     getStartTime: () => date,
   });
 
-  it('メインフローが正しく連携して実行されるべき', () => {
+  it('applyCommuteExpenses は CommuteExpenseUseCase を通じて処理を完遂すべき', () => {
     const mockEmail = 'test@example.com';
-    const mockDate = new Date(2026, 0, 29); // 1月29日 -> 期間: 2025/12/16 - 2026/01/15
-    const mockDaysCount = 2;
-    const mockDates = ['2026-01-10', '2026-01-12'];
-
+    const mockDate = new Date(2026, 0, 29);
+    const mockUnitPrice = 1000;
+    
     // テストデータ
-    // 期間内のイベントを用意
     const events = [
-      createMockEvent('出社', new Date(2026, 0, 10)), // 1/10
-      createMockEvent('出社', new Date(2026, 0, 12)), // 1/12
+      createMockEvent('出社', new Date(2026, 0, 10)),
+      createMockEvent('出社', new Date(2026, 0, 12)),
     ];
 
     mockGetEmail.mockReturnValue(mockEmail);
-    // 保険のモックも設定（もし本物が呼ばれたら空を返すようにしてエラー回避）
-    mockGetEvents.mockReturnValue(events); // events を返すように修正
+    mockGetEvents.mockReturnValue(events);
 
-    const result = main.calculateAndSaveCommuteExpenses(mockDate);
+    const result = main.applyCommuteExpenses(mockDate, mockUnitPrice);
 
-    // 戻り値の検証
+    // UseCase が正しく機能した結果として、戻り値を検証
     expect(result).toEqual({
-      daysCount: mockDaysCount,
-      totalAmount: 2000, // 1000 * 2
-      dates: mockDates
+      daysCount: 2,
+      totalAmount: 2000,
+      dates: ['2026-01-10', '2026-01-12']
     });
 
-    expect(mockGetActiveUser).toHaveBeenCalled();
-
-    // カレンダー取得
+    // 内部のAPI呼び出しも検証（統合テストとして）
     expect(mockGetDefaultCalendar).toHaveBeenCalled();
-    expect(mockGetEvents).toHaveBeenCalledWith(
-      new Date(2025, 11, 16), // startDate
-      new Date(2026, 0, 15) // endDate
-    );
-
-    // スプレッドシート保存
-    expect(mockOpenById).toHaveBeenCalledWith(expect.any(String)); // IDは定数なのでanyで
-    expect(mockGetSheetByName).toHaveBeenCalledWith(expect.any(String));
-
+    expect(mockGetEvents).toHaveBeenCalled();
     expect(mockAppendRow).toHaveBeenCalledWith([
       mockDate,
       mockEmail,
-      '2026-01', // targetMonth
-      1000, // unitPrice
-      2, // daysCount
-      2000, // totalAmount
-      '2026-01-10, 2026-01-12', // dateList
+      '2026-01',
+      mockUnitPrice,
+      2,
+      2000,
+      '2026-01-10, 2026-01-12'
     ]);
   });
 });

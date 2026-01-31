@@ -56,7 +56,7 @@ describe('ChatHandler', () => {
       // 状態を「待ち」に設定
       mockGet.mockReturnValue('WAITING_FOR_AMOUNT');
       
-      const spyCalculate = jest.spyOn(main, 'calculateAndSaveCommuteExpenses').mockReturnValue({
+      const spyApply = jest.spyOn(main, 'applyCommuteExpenses').mockReturnValue({
         daysCount: 3,
         totalAmount: 3000,
         dates: ['2026-01-10']
@@ -71,8 +71,8 @@ describe('ChatHandler', () => {
       onMessage(event);
 
       // 往復1000円（片道500 * 2）で計算ロジックが呼ばれたか確認
-      // calculateAndSaveCommuteExpenses が第2引数に単価を受け取るようになる必要がある
-      expect(spyCalculate).toHaveBeenCalledWith(expect.any(Date), 1000);
+      // applyCommuteExpenses が第2引数に単価を受け取るようになる必要がある
+      expect(spyApply).toHaveBeenCalledWith(expect.any(Date), 1000);
 
       // 結果メッセージの送信確認
       expect(mockCreateMessage).toHaveBeenCalledWith(
@@ -83,13 +83,13 @@ describe('ChatHandler', () => {
       // 状態がクリアされたか確認
       expect(mockRemove).toHaveBeenCalledWith('state_test@example.com');
 
-      spyCalculate.mockRestore();
+      spyApply.mockRestore();
     });
 
     it('金額入力待ちの状態で「500円」のように単位付きで送られても、正しく計算すべき', () => {
       mockGet.mockReturnValue('WAITING_FOR_AMOUNT');
       
-      const spyCalculate = jest.spyOn(main, 'calculateAndSaveCommuteExpenses').mockReturnValue({
+      const spyApply = jest.spyOn(main, 'applyCommuteExpenses').mockReturnValue({
         daysCount: 1,
         totalAmount: 1000,
         dates: ['2026-01-10']
@@ -104,10 +104,10 @@ describe('ChatHandler', () => {
       onMessage(event);
 
       // 500円をパースして1000円（往復）で呼ばれることを期待
-      expect(spyCalculate).toHaveBeenCalledWith(expect.any(Date), 1000);
+      expect(spyApply).toHaveBeenCalledWith(expect.any(Date), 1000);
       expect(mockRemove).toHaveBeenCalledWith('state_test@example.com');
 
-      spyCalculate.mockRestore();
+      spyApply.mockRestore();
     });
 
     it('金額入力待ちの状態で数値以外を送られたら、エラーを返すべき', () => {
