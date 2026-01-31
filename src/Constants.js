@@ -20,8 +20,20 @@ var STATE_WAITING_FOR_AMOUNT = 'WAITING_FOR_AMOUNT';
 var COMMUTE_UNIT_PRICE = 1000;
 
 // スプレッドシート設定
-var SPREADSHEET_ID = '1La-fkJ0eSCmqC7DYaMATyCSXt2gRQUUqvTROH2mkdgM';
 var SHEET_NAME = 'シート1';
+
+/**
+ * スプレッドシートIDを取得する
+ * @returns {string} スプレッドシートID
+ */
+function getSpreadsheetId() {
+  if (typeof PropertiesService === 'undefined') {
+    return '';
+  }
+  return PropertiesService.getScriptProperties().getProperty('COMMUTE_EXPENSE_SPREDSHEET');
+}
+
+var SPREADSHEET_ID = getSpreadsheetId();
 
 // Node.js環境でのテスト用
 if (typeof module !== 'undefined') {
@@ -33,7 +45,8 @@ if (typeof module !== 'undefined') {
     STATE_KEY_PREFIX,
     STATE_WAITING_FOR_AMOUNT,
     COMMUTE_UNIT_PRICE,
-    SPREADSHEET_ID,
     SHEET_NAME,
+    SPREADSHEET_ID,
+    getSpreadsheetId, // テスト用に残しておく
   };
 }

@@ -8,7 +8,7 @@ if (typeof require !== 'undefined') {
  */
 function onMessage(event) {
   console.log('onMessage called with event:', JSON.stringify(event));
-  
+
   // イベントオブジェクトから必要な情報を抽出
   var data = extractEventData(event);
   var messageText = data.text;
@@ -30,7 +30,10 @@ function onMessage(event) {
   // キーワードチェック（新規フロー開始）
   var keyword = typeof CHAT_KEYWORD !== 'undefined' ? CHAT_KEYWORD : '通勤費';
   if (messageText.indexOf(keyword) !== -1) {
-    var waitingState = typeof STATE_WAITING_FOR_AMOUNT !== 'undefined' ? STATE_WAITING_FOR_AMOUNT : 'WAITING_FOR_AMOUNT';
+    var waitingState =
+      typeof STATE_WAITING_FOR_AMOUNT !== 'undefined'
+        ? STATE_WAITING_FOR_AMOUNT
+        : 'WAITING_FOR_AMOUNT';
     cache.put(stateKey, waitingState, 600); // 10分間有効
     Chat.Spaces.Messages.create(
       { text: '片道の通勤費を数値で教えてください（例: 500）' },
@@ -41,7 +44,12 @@ function onMessage(event) {
 
   // それ以外のメッセージ
   Chat.Spaces.Messages.create(
-    { text: '「' + keyword + '」という言葉を含めて話しかけてください。自動でカレンダーを集計して申請します。' },
+    {
+      text:
+        '「' +
+        keyword +
+        '」という言葉を含めて話しかけてください。自動でカレンダーを集計して申請します。',
+    },
     spaceName
   );
 }
@@ -61,28 +69,41 @@ function handleAmountInput(messageText, spaceName, stateKey, cache) {
   var amount = parseInt(numericText, 10);
 
   if (isNaN(amount) || numericText === '') {
-    Chat.Spaces.Messages.create({ text: '数値を入力してください。中断する場合は「キャンセル」と入力してください。' }, spaceName);
+    Chat.Spaces.Messages.create(
+      { text: '数値を入力してください。中断する場合は「キャンセル」と入力してください。' },
+      spaceName
+    );
     return;
   }
 
   try {
     var roundTripAmount = amount * 2;
     var result;
-    if (typeof main !== 'undefined' && main.calculateAndSaveCommuteExpenses) {
-      result = main.calculateAndSaveCommuteExpenses(new Date(), roundTripAmount);
+    if (typeof main !== 'undefined' && main.applyCommuteExpenses) {
+      result = main.applyCommuteExpenses(new Date(), roundTripAmount);
     } else {
-      result = calculateAndSaveCommuteExpenses(new Date(), roundTripAmount);
+      result = applyCommuteExpenses(new Date(), roundTripAmount);
     }
 
-    var message = '✅ 交通費の申請を受け付けました！\n\n' +
-                  '出社日: ' + (result.dates ? result.dates.join(', ') : 'なし') + ' (' + result.daysCount + '日間)\n' +
-                  '交通費: ' + result.totalAmount + '円';
+    var message =
+      '✅ 通勤費の申請を受け付けました！\n\n' +
+      '出社日: ' +
+      (result.dates ? result.dates.join(', ') : 'なし') +
+      ' (' +
+      result.daysCount +
+      '日間)\n' +
+      '通勤費: ' +
+      result.totalAmount +
+      '円';
 
     Chat.Spaces.Messages.create({ text: message }, spaceName);
     cache.remove(stateKey);
   } catch (error) {
     console.error('Error in handleAmountInput:', error);
-    Chat.Spaces.Messages.create({ text: '❌ エラーが発生しました: ' + (error.message || String(error)) }, spaceName);
+    Chat.Spaces.Messages.create(
+      { text: '❌ エラーが発生しました: ' + (error.message || String(error)) },
+      spaceName
+    );
   }
 }
 
@@ -90,21 +111,21 @@ function handleAmountInput(messageText, spaceName, stateKey, cache) {
  * イベントオブジェクトから共通のデータを抽出します
  */
 function extractEventData(event) {
-  var text = "";
+  var text = '';
   if (event.message && event.message.text) {
     text = event.message.text.trim();
   } else if (event.chat && event.chat.messagePayload && event.chat.messagePayload.message) {
     text = event.chat.messagePayload.message.text.trim();
   }
 
-  var spaceName = "";
+  var spaceName = '';
   if (event.space) {
     spaceName = event.space.name;
   } else if (event.chat && event.chat.messagePayload && event.chat.messagePayload.space) {
     spaceName = event.chat.messagePayload.space.name;
   }
 
-  var userEmail = "";
+  var userEmail = '';
   if (event.user && event.user.email) {
     userEmail = event.user.email;
   } else if (event.chat && event.chat.messagePayload && event.chat.messagePayload.user) {
@@ -123,7 +144,12 @@ function onAddedToSpace(event) {
 
   if (data.spaceName) {
     Chat.Spaces.Messages.create(
-      { text: 'こんにちは！交通費精算コンシェルジュです。「' + keyword + '」と話しかけると、自動でカレンダーを集計して申請します。' },
+      {
+        text:
+          'こんにちは！交通費精算コンシェルジュです。「' +
+          keyword +
+          '」と話しかけると、自動でカレンダーを集計して申請します。',
+      },
       data.spaceName
     );
   }
@@ -142,7 +168,7 @@ if (typeof module !== 'undefined') {
  * ボットがスペースに追加された時のハンドラ
  */
 function onAddedToSpace(event) {
-  var spaceName = "";
+  var spaceName = '';
   if (event.space) {
     spaceName = event.space.name;
   } else if (event.chat && event.chat.messagePayload && event.chat.messagePayload.space) {
@@ -153,7 +179,12 @@ function onAddedToSpace(event) {
 
   if (spaceName) {
     Chat.Spaces.Messages.create(
-      { text: 'こんにちは！交通費精算コンシェルジュです。「' + keyword + '」と話しかけると、自動でカレンダーを集計して申請します。' },
+      {
+        text:
+          'こんにちは！交通費精算コンシェルジュです。「' +
+          keyword +
+          '」と話しかけると、自動でカレンダーを集計して申請します。',
+      },
       spaceName
     );
   }
