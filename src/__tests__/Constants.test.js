@@ -7,6 +7,6 @@ describe('Constants', () => {
     expect(Constants.COMMUTE_KEYWORD).toBe('出社');
     expect(Constants.COMMUTE_UNIT_PRICE).toBe(1000);
     expect(Constants.SHEET_NAME).toBe('シート1');
-    expect(Constants.CHAT_KEYWORD).toBe('交通費');
+    expect(Constants.CHAT_KEYWORD).toBe('通勤費');
   });
 });

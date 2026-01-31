@@ -11,86 +11,129 @@ global.Chat = {
   }
 };
 
+// CacheServiceのグローバルモック
+const mockPut = jest.fn();
+const mockGet = jest.fn();
+const mockRemove = jest.fn();
+global.CacheService = {
+  getUserCache: jest.fn().mockReturnValue({
+    put: mockPut,
+    get: mockGet,
+    remove: mockRemove
+  })
+};
+
 describe('ChatHandler', () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
-  describe('onMessage', () => {
-    it('「交通費」という文字列が含まれるメッセージを受信したら交通費計算を実行し、詳細な結果を送信すべき', () => {
-      // スパイを設定し、戻り値を設定
-      const spyCalculate = jest.spyOn(main, 'calculateAndSaveCommuteExpenses').mockReturnValue({
-        daysCount: 2,
-        totalAmount: 2000,
-        dates: ['2026-01-10', '2026-01-12']
-      });
-
+  describe('onMessage - 対話フロー', () => {
+    it('「通勤費」と送られたら、金額の入力を促し、状態を保存すべき', () => {
       const event = {
-        message: {
-          text: '交通費精算をお願いします'
-        },
-        space: {
-          name: 'spaces/AAAA'
-        }
+        message: { text: '通勤費' },
+        user: { email: 'test@example.com' },
+        space: { name: 'spaces/AAAA' }
       };
 
       onMessage(event);
 
-      expect(spyCalculate).toHaveBeenCalled();
+      // 状態がキャッシュに保存されたか確認
+      expect(mockPut).toHaveBeenCalledWith(
+        'state_test@example.com',
+        'WAITING_FOR_AMOUNT',
+        600 // 有効期限10分
+      );
+
+      // 質問メッセージが送信されたか確認
+      expect(mockCreateMessage).toHaveBeenCalledWith(
+        { text: '片道の通勤費を数値で教えてください（例: 500）' },
+        'spaces/AAAA'
+      );
+    });
+
+    it('金額入力待ちの状態で数値を送られたら、計算を実行して結果を返すべき', () => {
+      // 状態を「待ち」に設定
+      mockGet.mockReturnValue('WAITING_FOR_AMOUNT');
       
-      // 詳細なメッセージが含まれているか検証
+      const spyCalculate = jest.spyOn(main, 'calculateAndSaveCommuteExpenses').mockReturnValue({
+        daysCount: 3,
+        totalAmount: 3000,
+        dates: ['2026-01-10']
+      });
+
+      const event = {
+        message: { text: '500' }, // 片道500円
+        user: { email: 'test@example.com' },
+        space: { name: 'spaces/AAAA' }
+      };
+
+      onMessage(event);
+
+      // 往復1000円（片道500 * 2）で計算ロジックが呼ばれたか確認
+      // calculateAndSaveCommuteExpenses が第2引数に単価を受け取るようになる必要がある
+      expect(spyCalculate).toHaveBeenCalledWith(expect.any(Date), 1000);
+
+      // 結果メッセージの送信確認
       expect(mockCreateMessage).toHaveBeenCalledWith(
-        expect.objectContaining({ 
-          text: expect.stringContaining('出社日: 2026-01-10, 2026-01-12') 
-        }),
+        expect.objectContaining({ text: expect.stringContaining('3000円') }),
         'spaces/AAAA'
       );
-      expect(mockCreateMessage).toHaveBeenCalledWith(
-        expect.objectContaining({ 
-          text: expect.stringContaining('交通費: 2000円') 
-        }),
-        'spaces/AAAA'
-      );
+
+      // 状態がクリアされたか確認
+      expect(mockRemove).toHaveBeenCalledWith('state_test@example.com');
 
       spyCalculate.mockRestore();
     });
 
-    it('「交通費」という文字列が含まれないメッセージの場合は無視し、ヘルプを返すべき', () => {
-      const spyCalculate = jest.spyOn(main, 'calculateAndSaveCommuteExpenses').mockImplementation(() => {});
+    it('金額入力待ちの状態で「500円」のように単位付きで送られても、正しく計算すべき', () => {
+      mockGet.mockReturnValue('WAITING_FOR_AMOUNT');
+      
+      const spyCalculate = jest.spyOn(main, 'calculateAndSaveCommuteExpenses').mockReturnValue({
+        daysCount: 1,
+        totalAmount: 1000,
+        dates: ['2026-01-10']
+      });
 
       const event = {
-        message: {
-          text: 'こんにちは'
-        },
-        space: {
-          name: 'spaces/AAAA'
-        }
+        message: { text: '500円' }, 
+        user: { email: 'test@example.com' },
+        space: { name: 'spaces/AAAA' }
       };
 
       onMessage(event);
 
-      expect(spyCalculate).not.toHaveBeenCalled();
-      expect(mockCreateMessage).toHaveBeenCalledWith(
-        { text: '「交通費」という言葉を含めて話しかけてください。自動でカレンダーを集計して申請します。' },
-        'spaces/AAAA'
-      );
+      // 500円をパースして1000円（往復）で呼ばれることを期待
+      expect(spyCalculate).toHaveBeenCalledWith(expect.any(Date), 1000);
+      expect(mockRemove).toHaveBeenCalledWith('state_test@example.com');
 
       spyCalculate.mockRestore();
+    });
+
+    it('金額入力待ちの状態で数値以外を送られたら、エラーを返すべき', () => {
+      mockGet.mockReturnValue('WAITING_FOR_AMOUNT');
+
+      const event = {
+        message: { text: 'あいうえお' },
+        user: { email: 'test@example.com' },
+        space: { name: 'spaces/AAAA' }
+      };
+
+      onMessage(event);
+
+      expect(mockCreateMessage).toHaveBeenCalledWith(
+        { text: '数値を入力してください。中断する場合は「キャンセル」と入力してください。' },
+        'spaces/AAAA'
+      );
     });
   });
 
   describe('onAddToSpace', () => {
-    it('スペースに追加されたらChat API経由で挨拶メッセージを送信すべき', () => {
-      const event = {
-        space: {
-          name: 'spaces/AAAA'
-        }
-      };
-      
+    it('スペースに追加されたら挨拶メッセージを送信すべき', () => {
+      const event = { space: { name: 'spaces/AAAA' } };
       onAddToSpace(event);
-      
       expect(mockCreateMessage).toHaveBeenCalledWith(
-        { text: 'こんにちは！交通費精算コンシェルジュです。「交通費」と話しかけると、自動でカレンダーを集計して申請します。' },
+        expect.objectContaining({ text: expect.stringContaining('通勤費') }),
         'spaces/AAAA'
       );
     });

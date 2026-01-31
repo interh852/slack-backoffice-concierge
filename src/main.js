@@ -9,11 +9,15 @@ if (typeof require !== 'undefined') {
 /**
  * 交通費を計算してスプレッドシートに保存するメイン関数
  * @param {Date} baseDate 基準日
+ * @param {number} unitPrice 単価（往復分、省略時は定数を使用）
  * @returns {Object} 計算結果 { daysCount, totalAmount, dates }
  */
-function calculateAndSaveCommuteExpenses(baseDate) {
+function calculateAndSaveCommuteExpenses(baseDate, unitPrice) {
   console.log('calculateAndSaveCommuteExpenses started');
   if (!baseDate) baseDate = new Date();
+  
+  // 単価の決定
+  var currentUnitPrice = typeof unitPrice === 'number' ? unitPrice : COMMUTE_UNIT_PRICE;
   
   var userEmail = Session.getActiveUser().getEmail();
   console.log('User Email:', userEmail);
@@ -28,7 +32,7 @@ function calculateAndSaveCommuteExpenses(baseDate) {
   console.log('Commute Summary:', summary);
   
   // 3. 金額計算
-  var totalAmount = summary.count * COMMUTE_UNIT_PRICE;
+  var totalAmount = summary.count * currentUnitPrice;
   
   var targetYear = period.endDate.getFullYear();
   var targetMonth = period.endDate.getMonth() + 1;
@@ -41,7 +45,7 @@ function calculateAndSaveCommuteExpenses(baseDate) {
     applicationDate: baseDate,
     userEmail: userEmail,
     targetMonth: targetMonthStr,
-    unitPrice: COMMUTE_UNIT_PRICE,
+    unitPrice: currentUnitPrice,
     daysCount: summary.count,
     totalAmount: totalAmount,
     dateList: summary.dates.join(', ')
