@@ -21,6 +21,7 @@ var COMMUTE_UNIT_PRICE = 1000;
 
 // スプレッドシート設定
 var SHEET_NAME = 'シート1';
+var CONFIG_SHEET_NAME = '情報';
 
 /**
  * スプレッドシートIDを取得する
@@ -46,6 +47,7 @@ if (typeof module !== 'undefined') {
     STATE_WAITING_FOR_AMOUNT,
     COMMUTE_UNIT_PRICE,
     SHEET_NAME,
+    CONFIG_SHEET_NAME,
     SPREADSHEET_ID,
     getSpreadsheetId, // テスト用に残しておく
   };
