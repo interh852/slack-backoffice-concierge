@@ -130,6 +130,10 @@ function executeCommuteExpense(amount, spaceName, stateKey, cache) {
       result.totalAmount +
       '円';
 
+    if (result.spreadsheetUrl) {
+      message += '\n\n精算書を作成しました:\n' + result.spreadsheetUrl;
+    }
+
     Chat.Spaces.Messages.create({ text: message }, spaceName);
     cache.remove(stateKey);
   } catch (error) {

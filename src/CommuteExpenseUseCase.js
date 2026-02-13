@@ -2,7 +2,7 @@ if (typeof require !== 'undefined') {
   var { getSettlementPeriod } = require('./PeriodCalculator');
   var { CalendarService } = require('./CalendarService');
   var { SpreadsheetService } = require('./SpreadsheetService');
-  var { COMMUTE_UNIT_PRICE, SPREADSHEET_ID, SHEET_NAME } = require('./Constants');
+  var { COMMUTE_UNIT_PRICE, SPREADSHEET_ID, SHEET_NAME, TEMPLATE_SPREADSHEET_ID } = require('./Constants');
 }
 
 /**
@@ -14,7 +14,7 @@ function CommuteExpenseUseCase() {}
  * 通勤費を計算して保存する
  * @param {Date} baseDate 基準日
  * @param {number} unitPrice 単価（往復分、省略時は定数を使用）
- * @returns {Object} 計算結果 { daysCount, totalAmount, dates }
+ * @returns {Object} 計算結果 { daysCount, totalAmount, dates, spreadsheetUrl }
  */
 CommuteExpenseUseCase.prototype.execute = function (baseDate, unitPrice) {
   console.log('CommuteExpenseUseCase.execute started');
@@ -45,22 +45,38 @@ CommuteExpenseUseCase.prototype.execute = function (baseDate, unitPrice) {
   // 定数が未定義の場合のフォールバック
   var sheetId = typeof SPREADSHEET_ID !== 'undefined' ? SPREADSHEET_ID : '';
   var sheetName = typeof SHEET_NAME !== 'undefined' ? SHEET_NAME : '';
+  var templateId = typeof TEMPLATE_SPREADSHEET_ID !== 'undefined' ? TEMPLATE_SPREADSHEET_ID : '';
 
   var spreadsheetService = new SpreadsheetService(sheetId, sheetName);
-  spreadsheetService.saveRecord({
-    applicationDate: baseDate,
-    userEmail: userEmail,
-    targetMonth: targetMonthStr,
-    unitPrice: currentUnitPrice,
-    daysCount: summary.count,
-    totalAmount: totalAmount,
-    dateList: summary.dates.join(', '),
-  });
+  var spreadsheetUrl = '';
+
+  if (templateId) {
+    spreadsheetUrl = spreadsheetService.exportToTemplate(templateId, {
+      applicationDate: baseDate,
+      userEmail: userEmail,
+      targetMonth: targetMonthStr,
+      unitPrice: currentUnitPrice,
+      daysCount: summary.count,
+      totalAmount: totalAmount,
+      dateList: summary.dates.join(', '),
+    });
+  } else {
+    spreadsheetService.saveRecord({
+      applicationDate: baseDate,
+      userEmail: userEmail,
+      targetMonth: targetMonthStr,
+      unitPrice: currentUnitPrice,
+      daysCount: summary.count,
+      totalAmount: totalAmount,
+      dateList: summary.dates.join(', '),
+    });
+  }
 
   return {
     daysCount: summary.count,
     totalAmount: totalAmount,
     dates: summary.dates,
+    spreadsheetUrl: spreadsheetUrl,
   };
 };
 
