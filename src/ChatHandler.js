@@ -30,13 +30,12 @@ function onMessage(event) {
 
   // Geminiを使って意図解析
   var gemini = new GeminiService();
-  var systemInstruction = 
-    'ユーザーのメッセージから以下の情報をJSON形式で抽出してください。\n' +
-    '1. intent: 「commute」（交通費精算の依頼）か「other」（それ以外・雑談）\n' +
-    '2. amount: メッセージに含まれる片道運賃（数値のみ）。抽出できなければ null。\n' +
-    '3. message: ユーザーへの返答メッセージ。丁寧かつ簡潔に。\n\n' +
-    '精算の依頼だが金額が不明な場合は、片道の運賃を尋ねるメッセージにしてください。\n' +
-    '金額が含まれている場合は、その金額で精算を開始する旨を伝えてください。';
+  
+  // スプレッドシートからプロンプトを取得
+  var sheetId = typeof SPREADSHEET_ID !== 'undefined' ? SPREADSHEET_ID : '';
+  var ss = SpreadsheetApp.openById(sheetId);
+  var promptSheet = ss.getSheetByName('通勤費');
+  var systemInstruction = promptSheet.getRange('B1').getValue();
   
   var responseText = gemini.generateContent(messageText, systemInstruction);
   var result;
