@@ -18,6 +18,8 @@ describe('Main Entry Point', () => {
   it('applyCommuteExpenses は CommuteExpenseUseCase を通じて処理を完遂すべき', () => {
     const mockDate = new Date(2026, 0, 29);
     const mockUnitPrice = 1000;
+    const mockUserName = '田中 太郎';
+    const mockUserEmail = 'test@example.com';
     const mockResult = {
       daysCount: 2,
       totalAmount: 2000,
@@ -27,18 +29,13 @@ describe('Main Entry Point', () => {
 
     mockExecute.mockReturnValue(mockResult);
 
-    const result = applyCommuteExpenses(mockDate, mockUnitPrice);
+    const result = applyCommuteExpenses(mockDate, mockUnitPrice, mockUserName, mockUserEmail);
 
     // UseCase が正しく呼ばれたか検証
     expect(CommuteExpenseUseCase).toHaveBeenCalled();
-    expect(mockExecute).toHaveBeenCalledWith(mockDate, mockUnitPrice);
+    expect(mockExecute).toHaveBeenCalledWith(mockDate, mockUnitPrice, mockUserName, mockUserEmail);
 
-    // UseCase が正しく機能した結果として、戻り値を検証
-    expect(result).toEqual({
-      daysCount: 2,
-      totalAmount: 2000,
-      dates: ['2026-01-10', '2026-01-12'],
-      spreadsheetUrl: 'https://example.com/spreadsheet'
-    });
+    // 戻り値の検証
+    expect(result).toEqual(mockResult);
   });
 });

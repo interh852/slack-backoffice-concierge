@@ -31,26 +31,11 @@ const { CommuteExpenseUseCase } = require('../CommuteExpenseUseCase');
 const { CalendarService } = require('../CalendarService');
 const { SpreadsheetService } = require('../SpreadsheetService');
 
-// GASのグローバルオブジェクトモック
-const mockGetActiveUser = jest.fn();
-const mockGetEmail = jest.fn();
-global.Session = {
-  getActiveUser: mockGetActiveUser,
-};
-
-const mockPeopleGet = jest.fn();
-global.People = {
-  People: {
-    get: mockPeopleGet
-  }
-};
-
 describe('CommuteExpenseUseCase', () => {
   let useCase;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    mockGetActiveUser.mockReturnValue({ getEmail: mockGetEmail });
     useCase = new CommuteExpenseUseCase();
   });
 
@@ -64,10 +49,6 @@ describe('CommuteExpenseUseCase', () => {
     const mockDates = ['2026-01-10', '2026-01-12'];
     const unitPrice = 1000;
 
-    mockGetEmail.mockReturnValue(mockEmail);
-    mockPeopleGet.mockReturnValue({
-      names: [{ displayName: mockUserName }]
-    });
     mockGetTemplateSpreadsheetId.mockReturnValue('test-template-id');
     
     mockGetSettlementPeriod.mockReturnValue({
@@ -80,7 +61,7 @@ describe('CommuteExpenseUseCase', () => {
     });
     mockExportToTemplate.mockReturnValue('https://example.com/spreadsheet');
 
-    const result = useCase.execute(mockDate, unitPrice);
+    const result = useCase.execute(mockDate, unitPrice, mockUserName, mockEmail);
 
     // 戻り値の検証
     expect(result).toEqual({
@@ -91,12 +72,21 @@ describe('CommuteExpenseUseCase', () => {
     });
 
     // 呼び出し検証
-    expect(mockPeopleGet).toHaveBeenCalledWith('people/me', expect.anything());
+    expect(mockGetSettlementPeriod).toHaveBeenCalledWith(mockDate);
+    expect(CalendarService).toHaveBeenCalled();
+    expect(mockGetCommuteSummary).toHaveBeenCalledWith(mockStartDate, mockEndDate);
+    expect(SpreadsheetService).toHaveBeenCalled();
     expect(mockExportToTemplate).toHaveBeenCalledWith('test-template-id', expect.objectContaining({
       userEmail: mockEmail,
       userName: mockUserName,
       unitPrice: unitPrice,
       totalAmount: 2000
     }));
+  });
+
+  it('メールアドレスがない場合にエラーを投げること', () => {
+    expect(() => {
+      useCase.execute(new Date(), 1000, '田中 太郎', null);
+    }).toThrow('User email is required');
   });
 });
