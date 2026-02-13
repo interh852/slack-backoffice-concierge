@@ -12,10 +12,8 @@ jest.mock('../CalendarService', () => ({
   CalendarService: jest.fn(() => mockCalendarServiceInstance)
 }));
 
-const mockSaveRecord = jest.fn();
 const mockExportToTemplate = jest.fn();
 const mockSpreadsheetServiceInstance = {
-  saveRecord: mockSaveRecord,
   exportToTemplate: mockExportToTemplate,
 };
 jest.mock('../SpreadsheetService', () => ({
@@ -24,8 +22,6 @@ jest.mock('../SpreadsheetService', () => ({
 
 jest.mock('../Constants', () => ({
   COMMUTE_UNIT_PRICE: 1000,
-  SPREADSHEET_ID: 'test-spreadsheet-id',
-  SHEET_NAME: 'test-sheet-name',
   TEMPLATE_SPREADSHEET_ID: 'test-template-id',
 }));
 
@@ -50,7 +46,7 @@ describe('CommuteExpenseUseCase', () => {
     useCase = new CommuteExpenseUseCase();
   });
 
-  it('実行すると期間計算・集計・保存を行い、結果を返すこと', () => {
+  it('実行すると期間計算・集計・テンプレート出力を行い、結果を返すこと', () => {
     const mockEmail = 'test@example.com';
     const mockDate = new Date(2026, 0, 29);
     const mockStartDate = new Date(2025, 11, 16);

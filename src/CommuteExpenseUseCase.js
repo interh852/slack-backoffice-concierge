@@ -2,7 +2,7 @@ if (typeof require !== 'undefined') {
   var { getSettlementPeriod } = require('./PeriodCalculator');
   var { CalendarService } = require('./CalendarService');
   var { SpreadsheetService } = require('./SpreadsheetService');
-  var { COMMUTE_UNIT_PRICE, SPREADSHEET_ID, SHEET_NAME, TEMPLATE_SPREADSHEET_ID } = require('./Constants');
+  var { COMMUTE_UNIT_PRICE, TEMPLATE_SPREADSHEET_ID } = require('./Constants');
 }
 
 /**
@@ -21,7 +21,6 @@ CommuteExpenseUseCase.prototype.execute = function (baseDate, unitPrice) {
   if (!baseDate) baseDate = new Date();
 
   // 単価の決定
-  // 定数が未定義の場合のフォールバックも考慮（テスト環境など）
   var defaultPrice = typeof COMMUTE_UNIT_PRICE !== 'undefined' ? COMMUTE_UNIT_PRICE : 1000;
   var currentUnitPrice = typeof unitPrice === 'number' ? unitPrice : defaultPrice;
 
@@ -41,16 +40,12 @@ CommuteExpenseUseCase.prototype.execute = function (baseDate, unitPrice) {
   var targetMonth = period.endDate.getMonth() + 1;
   var targetMonthStr = targetYear + '-' + targetMonth.toString().padStart(2, '0');
 
-  // 4. 保存
-  // 定数が未定義の場合のフォールバック
-  var sheetId = typeof SPREADSHEET_ID !== 'undefined' ? SPREADSHEET_ID : '';
-  var sheetName = typeof SHEET_NAME !== 'undefined' ? SHEET_NAME : '';
+  // 4. 保存（テンプレートへの出力のみ）
   var templateId = typeof TEMPLATE_SPREADSHEET_ID !== 'undefined' ? TEMPLATE_SPREADSHEET_ID : '';
-
-  var spreadsheetService = new SpreadsheetService(sheetId, sheetName);
   var spreadsheetUrl = '';
 
   if (templateId) {
+    var spreadsheetService = new SpreadsheetService();
     spreadsheetUrl = spreadsheetService.exportToTemplate(templateId, {
       applicationDate: baseDate,
       userEmail: userEmail,
@@ -61,8 +56,7 @@ CommuteExpenseUseCase.prototype.execute = function (baseDate, unitPrice) {
       dateList: summary.dates.join(', '),
     });
   } else {
-    // テンプレートがない場合は何もしない（リファクタリングにより追記処理を廃止）
-    console.warn('TEMPLATE_SPREADSHEET_ID is not defined. No record was saved.');
+    console.warn('TEMPLATE_SPREADSHEET_ID is not defined. No template was created.');
   }
 
   return {

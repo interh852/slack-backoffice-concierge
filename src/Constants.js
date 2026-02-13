@@ -19,12 +19,11 @@ var STATE_WAITING_FOR_AMOUNT = 'WAITING_FOR_AMOUNT';
 // 交通費計算に関する定数
 var COMMUTE_UNIT_PRICE = 1000;
 
-// スプレッドシート設定
-var SHEET_NAME = 'シート1';
+// 設定用スプレッドシート（モデルやプロンプトの管理用）
 var CONFIG_SHEET_NAME = '情報';
 
 /**
- * スプレッドシートIDを取得する
+ * 設定用スプレッドシートIDを取得する
  * @returns {string} スプレッドシートID
  */
 function getSpreadsheetId() {
@@ -58,7 +57,6 @@ if (typeof module !== 'undefined') {
     STATE_KEY_PREFIX,
     STATE_WAITING_FOR_AMOUNT,
     COMMUTE_UNIT_PRICE,
-    SHEET_NAME,
     CONFIG_SHEET_NAME,
     SPREADSHEET_ID,
     TEMPLATE_SPREADSHEET_ID,
