@@ -1,6 +1,6 @@
 if (typeof require !== 'undefined') {
   var main = require('./main');
-  var { SPREADSHEET_ID, CONFIG_SHEET_NAME, STATE_KEY_PREFIX, STATE_WAITING_FOR_AMOUNT } = require('./Constants');
+  var { getSpreadsheetId, CONFIG_SHEET_NAME, STATE_KEY_PREFIX, STATE_WAITING_FOR_AMOUNT } = require('./Constants');
   var { GeminiService } = require('./GeminiService');
 }
 
@@ -78,7 +78,7 @@ function getBotConfig() {
   }
   
   // キャッシュがなければスプレッドシートから取得
-  var sheetId = typeof SPREADSHEET_ID !== 'undefined' ? SPREADSHEET_ID : '';
+  var sheetId = typeof getSpreadsheetId === 'function' ? getSpreadsheetId() : '';
   if (!sheetId) sheetId = PropertiesService.getScriptProperties().getProperty('COMMUTE_EXPENSE_SPREDSHEET');
   
   var ss = SpreadsheetApp.openById(sheetId);

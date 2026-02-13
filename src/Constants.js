@@ -22,15 +22,25 @@ var COMMUTE_UNIT_PRICE = 1000;
 // 設定用スプレッドシート（モデルやプロンプトの管理用）
 var CONFIG_SHEET_NAME = '情報';
 
+// テンプレートのセル番地
+var TEMPLATE_CELLS = {
+  USER_NAME: 'A2',
+  PASS_STATUS: 'B2',
+  ONE_WAY_COST: 'D2',
+  DAYS_COUNT: 'E2',
+  TOTAL_AMOUNT: 'F2',
+  DATE_LIST: 'G2',
+};
+
 /**
  * 設定用スプレッドシートIDを取得する
  * @returns {string} スプレッドシートID
  */
 function getSpreadsheetId() {
-  if (typeof PropertiesService === 'undefined') {
+  if (typeof PropertiesService === 'undefined' || !PropertiesService.getScriptProperties()) {
     return '';
   }
-  return PropertiesService.getScriptProperties().getProperty('COMMUTE_EXPENSE_SPREDSHEET');
+  return PropertiesService.getScriptProperties().getProperty('COMMUTE_EXPENSE_SPREDSHEET') || '';
 }
 
 /**
@@ -38,14 +48,11 @@ function getSpreadsheetId() {
  * @returns {string} テンプレートスプレッドシートID
  */
 function getTemplateSpreadsheetId() {
-  if (typeof PropertiesService === 'undefined') {
+  if (typeof PropertiesService === 'undefined' || !PropertiesService.getScriptProperties()) {
     return '';
   }
-  return PropertiesService.getScriptProperties().getProperty('COMMUTE_TEMPLATE_SPREADSHEET');
+  return PropertiesService.getScriptProperties().getProperty('COMMUTE_TEMPLATE_SPREADSHEET') || '';
 }
-
-var SPREADSHEET_ID = getSpreadsheetId();
-var TEMPLATE_SPREADSHEET_ID = getTemplateSpreadsheetId();
 
 // Node.js環境でのテスト用
 if (typeof module !== 'undefined') {
@@ -58,8 +65,7 @@ if (typeof module !== 'undefined') {
     STATE_WAITING_FOR_AMOUNT,
     COMMUTE_UNIT_PRICE,
     CONFIG_SHEET_NAME,
-    SPREADSHEET_ID,
-    TEMPLATE_SPREADSHEET_ID,
+    TEMPLATE_CELLS,
     getSpreadsheetId,
     getTemplateSpreadsheetId,
   };
