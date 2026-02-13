@@ -24,7 +24,21 @@ CommuteExpenseUseCase.prototype.execute = function (baseDate, unitPrice) {
   var defaultPrice = typeof COMMUTE_UNIT_PRICE !== 'undefined' ? COMMUTE_UNIT_PRICE : 1000;
   var currentUnitPrice = typeof unitPrice === 'number' ? unitPrice : defaultPrice;
 
+  // 実行ユーザー情報の取得
   var userEmail = Session.getActiveUser().getEmail();
+  var userName = userEmail.split('@')[0]; // フォールバック: メールのアカウント名
+
+  // People API を使ってフルネームの取得を試みる
+  try {
+    if (typeof People !== 'undefined' && People.People) {
+      var person = People.People.get('people/me', { personFields: 'names' });
+      if (person.names && person.names.length > 0) {
+        userName = person.names[0].displayName;
+      }
+    }
+  } catch (e) {
+    console.warn('Failed to get user name from People API:', e);
+  }
 
   // 1. 精算期間の計算
   var period = getSettlementPeriod(baseDate);
@@ -49,6 +63,7 @@ CommuteExpenseUseCase.prototype.execute = function (baseDate, unitPrice) {
     spreadsheetUrl = spreadsheetService.exportToTemplate(templateId, {
       applicationDate: baseDate,
       userEmail: userEmail,
+      userName: userName,
       targetMonth: targetMonthStr,
       unitPrice: currentUnitPrice,
       daysCount: summary.count,

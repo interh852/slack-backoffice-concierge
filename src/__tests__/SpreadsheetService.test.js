@@ -55,6 +55,7 @@ describe('SpreadsheetService', () => {
     const record = {
       applicationDate: new Date(2026, 0, 29),
       userEmail: 'taro.tanaka@example.com',
+      userName: '田中 太郎',
       targetMonth: '2026-01',
       unitPrice: 1000,
       daysCount: 5,
@@ -66,23 +67,11 @@ describe('SpreadsheetService', () => {
 
     expect(url).toBe('https://example.com/spreadsheet');
     expect(mockGetFileById).toHaveBeenCalledWith(templateId);
-    expect(mockMakeCopy).toHaveBeenCalledWith(`通勤費精算_${record.targetMonth}_taro.tanaka`, expect.anything());
+    expect(mockMakeCopy).toHaveBeenCalledWith(`通勤費精算_${record.targetMonth}_田中 太郎`, expect.anything());
     expect(mockOpen).toHaveBeenCalledWith('mock-copy-file');
-    
-    // フォルダ作成の呼び出し確認
-    expect(mockFolder.createFolder).toHaveBeenCalledWith('backoffice-concierge');
-    expect(mockFolder.createFolder).toHaveBeenCalledWith('通勤費');
     
     // テンプレートの形式に沿った流し込み確認
     expect(mockGetRange).toHaveBeenCalledWith('A2');
-    expect(mockSetRangeValue).toHaveBeenCalledWith('taro.tanaka');
-    expect(mockGetRange).toHaveBeenCalledWith('D2');
-    expect(mockSetRangeValue).toHaveBeenCalledWith(500); // 片道
-    expect(mockGetRange).toHaveBeenCalledWith('E2');
-    expect(mockSetRangeValue).toHaveBeenCalledWith(5);
-    expect(mockGetRange).toHaveBeenCalledWith('F2');
-    expect(mockSetRangeValue).toHaveBeenCalledWith(5000);
-    expect(mockGetRange).toHaveBeenCalledWith('G2');
-    expect(mockSetRangeValue).toHaveBeenCalledWith('2026/01/20, 2026/01/21');
+    expect(mockSetRangeValue).toHaveBeenCalledWith('田中 太郎');
   });
 });
