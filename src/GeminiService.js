@@ -1,10 +1,25 @@
+if (typeof require !== 'undefined') {
+  var Constants = require('./Constants');
+}
+
 /**
  * Google AI Studio (Gemini API) との通信を担当する service
  */
 function GeminiService() {
   this.apiKey = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
-  // モデルは最新の 2.5 Flash Lite を使用
-  this.model = 'gemini-2.5-flash-lite';
+  
+  // スプレッドシートからモデル名を取得
+  var sheetId = typeof Constants !== 'undefined' ? Constants.SPREADSHEET_ID : SPREADSHEET_ID;
+  var sheetName = typeof Constants !== 'undefined' ? Constants.CONFIG_SHEET_NAME : CONFIG_SHEET_NAME;
+  
+  // フォールバック（定義されていない場合）
+  if (!sheetId) sheetId = '';
+  if (!sheetName) sheetName = '情報';
+  
+  var ss = SpreadsheetApp.openById(sheetId);
+  var sheet = ss.getSheetByName(sheetName);
+  this.model = sheet.getRange('B1').getValue();
+  
   this.apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/' + this.model + ':generateContent?key=' + this.apiKey;
 }
 
