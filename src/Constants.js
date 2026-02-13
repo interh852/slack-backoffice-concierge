@@ -22,6 +22,7 @@ var COMMUTE_UNIT_PRICE = 1000;
 // スプレッドシート設定
 var SHEET_NAME = 'シート1';
 var CONFIG_SHEET_NAME = '情報';
+var TEMPLATE_SPREADSHEET_ID = '1aps-6ZNt-6xBVV_dmp9pL2oHn6dMKJ88DcKCVva8_2w';
 
 /**
  * スプレッドシートIDを取得する
