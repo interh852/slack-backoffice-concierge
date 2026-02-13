@@ -15,14 +15,11 @@ global.PropertiesService = {
 };
 
 // SpreadsheetAppのモック
+const mockGetRange = jest.fn();
+const mockGetSheetByName = jest.fn();
+const mockOpenById = jest.fn();
 global.SpreadsheetApp = {
-  openById: jest.fn().mockReturnValue({
-    getSheetByName: jest.fn().mockReturnValue({
-      getRange: jest.fn().mockReturnValue({
-        getValue: jest.fn().mockReturnValue('gemini-2.5-flash-lite')
-      })
-    })
-  })
+  openById: mockOpenById
 };
 
 // Chat APIのグローバルモック
@@ -50,6 +47,22 @@ global.CacheService = {
 describe('ChatHandler', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    
+    // スプレッドシートのデフォルトモック設定
+    mockOpenById.mockReturnValue({
+      getSheetByName: mockGetSheetByName
+    });
+    mockGetSheetByName.mockImplementation((name) => {
+      if (name === '情報' || name === '通勤費') {
+        return {
+          getRange: jest.fn().mockReturnValue({
+            getValue: jest.fn().mockReturnValue(name === '情報' ? 'gemini-2.5-flash-lite' : 'テスト用プロンプト')
+          })
+        };
+      }
+      return null;
+    });
+
     // デフォルトでは Gemini は「その他」を返すと仮定
     mockGenerateContent.mockReturnValue(JSON.stringify({
       intent: 'other',
@@ -59,6 +72,25 @@ describe('ChatHandler', () => {
   });
 
   describe('onMessage - Gemini 統合フロー', () => {
+    it('スプレッドシートからプロンプトを取得し、Geminiに渡すべき', () => {
+      mockGenerateContent.mockReturnValue(JSON.stringify({
+        intent: 'other',
+        message: 'おっけー'
+      }));
+
+      const event = {
+        message: { text: 'テスト' },
+        user: { email: 'test@example.com' },
+        space: { name: 'spaces/AAAA' }
+      };
+
+      onMessage(event);
+
+      expect(mockOpenById).toHaveBeenCalled();
+      expect(mockGetSheetByName).toHaveBeenCalledWith('通勤費');
+      expect(mockGenerateContent).toHaveBeenCalledWith('テスト', 'テスト用プロンプト');
+    });
+
     it('自然言語で精算を依頼されたら、金額の入力を促すべき', () => {
       mockGenerateContent.mockReturnValue(JSON.stringify({
         intent: 'commute',
