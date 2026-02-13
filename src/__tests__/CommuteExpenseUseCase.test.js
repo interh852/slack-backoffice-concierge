@@ -20,9 +20,10 @@ jest.mock('../SpreadsheetService', () => ({
   SpreadsheetService: jest.fn(() => mockSpreadsheetServiceInstance)
 }));
 
+const mockGetTemplateSpreadsheetId = jest.fn();
 jest.mock('../Constants', () => ({
   COMMUTE_UNIT_PRICE: 1000,
-  TEMPLATE_SPREADSHEET_ID: 'test-template-id',
+  getTemplateSpreadsheetId: mockGetTemplateSpreadsheetId,
 }));
 
 // その後に require
@@ -56,6 +57,7 @@ describe('CommuteExpenseUseCase', () => {
     const unitPrice = 1000;
 
     mockGetEmail.mockReturnValue(mockEmail);
+    mockGetTemplateSpreadsheetId.mockReturnValue('test-template-id');
     
     mockGetSettlementPeriod.mockReturnValue({
       startDate: mockStartDate,

@@ -2,7 +2,7 @@ if (typeof require !== 'undefined') {
   var { getSettlementPeriod } = require('./PeriodCalculator');
   var { CalendarService } = require('./CalendarService');
   var { SpreadsheetService } = require('./SpreadsheetService');
-  var { COMMUTE_UNIT_PRICE, TEMPLATE_SPREADSHEET_ID } = require('./Constants');
+  var { COMMUTE_UNIT_PRICE, getTemplateSpreadsheetId } = require('./Constants');
 }
 
 /**
@@ -41,7 +41,7 @@ CommuteExpenseUseCase.prototype.execute = function (baseDate, unitPrice) {
   var targetMonthStr = targetYear + '-' + targetMonth.toString().padStart(2, '0');
 
   // 4. 保存（テンプレートへの出力のみ）
-  var templateId = typeof TEMPLATE_SPREADSHEET_ID !== 'undefined' ? TEMPLATE_SPREADSHEET_ID : '';
+  var templateId = typeof getTemplateSpreadsheetId === 'function' ? getTemplateSpreadsheetId() : '';
   var spreadsheetUrl = '';
 
   if (templateId) {
@@ -56,7 +56,7 @@ CommuteExpenseUseCase.prototype.execute = function (baseDate, unitPrice) {
       dateList: summary.dates.join(', '),
     });
   } else {
-    console.warn('TEMPLATE_SPREADSHEET_ID is not defined. No template was created.');
+    console.warn('Template spreadsheet ID is not defined. No template was created.');
   }
 
   return {
