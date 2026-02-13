@@ -7,6 +7,24 @@ jest.mock('../GeminiService');
 const mockGenerateContent = jest.fn();
 GeminiService.prototype.generateContent = mockGenerateContent;
 
+// PropertiesServiceのモック
+global.PropertiesService = {
+  getScriptProperties: jest.fn().mockReturnValue({
+    getProperty: jest.fn().mockReturnValue('test-api-key')
+  })
+};
+
+// SpreadsheetAppのモック
+global.SpreadsheetApp = {
+  openById: jest.fn().mockReturnValue({
+    getSheetByName: jest.fn().mockReturnValue({
+      getRange: jest.fn().mockReturnValue({
+        getValue: jest.fn().mockReturnValue('gemini-2.5-flash-lite')
+      })
+    })
+  })
+};
+
 // Chat APIのグローバルモック
 const mockCreateMessage = jest.fn();
 global.Chat = {
@@ -118,7 +136,6 @@ describe('ChatHandler', () => {
   });
 
   describe('onMessage - 既存の金額入力待ちフロー', () => {
-    // 既存のテストも維持（Geminiを通さずに状態チェックで処理されるべき）
     it('金額入力待ちの状態で数値を送られたら、Geminiを介さず処理すべき', () => {
       mockGet.mockReturnValue('WAITING_FOR_AMOUNT');
       
@@ -136,7 +153,7 @@ describe('ChatHandler', () => {
 
       onMessage(event);
 
-      expect(mockGenerateContent).not.toHaveBeenCalled(); // 状態待ちならGeminiは呼ばない
+      expect(mockGenerateContent).not.toHaveBeenCalled();
       expect(spyApply).toHaveBeenCalledWith(expect.any(Date), 1000);
       spyApply.mockRestore();
     });
