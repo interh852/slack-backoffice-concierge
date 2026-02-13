@@ -11,10 +11,11 @@ Gemini API を統合しており、ユーザーの曖昧な入力から意図を
 - **意図の自動判別**: 入力内容から「精算の開始」や「金額の設定」を賢く判断します。
 
 ### 2. 通勤費精算の自動化
-Google カレンダーの「出社」イベントを自動集計し、スプレッドシートに記録を保存します。
-- **スマート集計**: 指定された精算期間（デフォルト：前月16日〜当月15日）の出社日を自動抽出。
+Google カレンダーの「出社」イベントを自動集計し、専用のスプレッドシートに出力します。
+- **集計期間**: 常に「依頼日の前月16日〜当月15日」を対象として集計します。
 - **自動計算**: 片道の金額を伝えるだけで、往復分を自動計算して申請。
-- **詳細レポート**: 集計結果（出社日リスト、日数、合計金額）をチャットで即座にフィードバック。
+- **個別ファイル出力**: 指定のテンプレートをコピーして、Google Drive 上に個人別の精算書（スプレッドシート）を自動作成します。
+- **自動フォルダ整理**: 保存先フォルダ（デフォルト：`backoffice-concierge/通勤費`）が自動的に作成され、整理されます。
 
 ## 🚀 セットアップ
 
@@ -26,8 +27,8 @@ npm install
 ### 2. GAS プロジェクトへのデプロイ
 `clasp` を使用してデプロイします。
 ```bash
-npx clasp login
-npx clasp push
+clasp login
+clasp push
 ```
 
 ### 3. スクリプトプロパティの設定
@@ -35,11 +36,12 @@ GAS の「プロジェクトの設定」にて、以下のスクリプトプロ�
 
 | プロパティ名 | 説明 |
 | :--- | :--- |
-| `COMMUTE_EXPENSE_SPREDSHEET` | 保存先および設定管理用の Google スプレッドシート ID |
+| `COMMUTE_EXPENSE_SPREDSHEET` | 設定管理用（モデル・プロンプト）の Google スプレッドシート ID |
+| `COMMUTE_TEMPLATE_SPREADSHEET` | 精算書の雛形となるテンプレートスプレッドシートの ID |
 | `GEMINI_API_KEY` | Google AI Studio で発行した Gemini API キー |
 
-### 4. スプレッドシートの設定
-管理用のスプレッドシートに以下のシートを作成し、設定値を入力してください。
+### 4. 設定用スプレッドシートの準備
+`COMMUTE_EXPENSE_SPREDSHEET` で指定したスプレッドシートに以下のシートを作成してください。
 
 #### 「情報」シート
 ボットの動作モデルを指定します。
@@ -49,21 +51,18 @@ GAS の「プロジェクトの設定」にて、以下のスクリプトプロ�
 AI の振る舞いを定義するシステムプロンプトを設定します。
 - **B1 セル**: システムプロンプト（AI への指示文）
 
-### 5. Google Chat API の設定
-Google Cloud Console にて Google Chat API を有効にし、Apps Script プロジェクトと紐付けを行ってください。
-
 ## 📖 使い方
 
 1. Google Chat で 「Backoffice Concierge」を開始。
 2. **「通勤費の精算をお願い」** のように話しかけます。
 3. 金額が不明な場合はボットから尋ねられます。**「片道500円」** のように答えてください。
-4. カレンダーから出社日が抽出され、自動で精算処理が完了します。
+4. カレンダーから出社日が抽出され、Google Drive の指定フォルダに精算書が作成されます。作成されたファイルの URL がチャットに返信されます。
 
 ## 🛠 テクニカルスタック
 
 - **Engine**: Google Apps Script (GAS)
-- **AI**: Gemini 2.0 Flash Lite (Google AI Studio)
-- **Services**: Google Calendar API, Google Sheets API, Google Chat API
+- **AI**: Gemini 2.5 Flash Lite (Google AI Studio)
+- **Services**: Google Calendar API, Google Drive API, Google Sheets API, Google Chat API
 - **Tooling**: Clasp, Jest (Testing), Prettier
 
 ## 🏗 ディレクトリ構成

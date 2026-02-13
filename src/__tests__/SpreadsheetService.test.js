@@ -1,32 +1,61 @@
 const { SpreadsheetService } = require('../SpreadsheetService');
 
 // モックの定義
-const mockAppendRow = jest.fn();
-const mockGetSheetByName = jest.fn().mockReturnValue({
-  appendRow: mockAppendRow,
+const mockSetRangeValue = jest.fn();
+const mockGetRange = jest.fn().mockReturnValue({
+  setValue: mockSetRangeValue,
 });
-const mockOpenById = jest.fn().mockReturnValue({
+const mockGetSheetByName = jest.fn().mockReturnValue({
+  getRange: mockGetRange,
+});
+
+const mockSheet = {
+  getRange: mockGetRange,
+};
+
+const mockOpen = jest.fn().mockReturnValue({
   getSheetByName: mockGetSheetByName,
+  getSheets: jest.fn().mockReturnValue([mockSheet]),
+  getUrl: jest.fn().mockReturnValue('https://example.com/spreadsheet'),
 });
 
 global.SpreadsheetApp = {
-  openById: mockOpenById,
+  open: mockOpen,
+};
+
+const mockMakeCopy = jest.fn().mockReturnValue('mock-copy-file');
+const mockGetFileById = jest.fn().mockReturnValue({
+  makeCopy: mockMakeCopy,
+});
+
+// フォルダモック
+const mockFolder = {
+  getFoldersByName: jest.fn().mockReturnValue({
+    hasNext: jest.fn().mockReturnValue(false),
+    next: jest.fn(),
+  }),
+  createFolder: jest.fn().mockReturnThis(),
+};
+
+global.DriveApp = {
+  getFileById: mockGetFileById,
+  getRootFolder: jest.fn().mockReturnValue(mockFolder),
 };
 
 describe('SpreadsheetService', () => {
   let service;
-  const SPREADSHEET_ID = 'test-id';
-  const SHEET_NAME = 'test-sheet';
 
   beforeEach(() => {
     jest.clearAllMocks();
-    service = new SpreadsheetService(SPREADSHEET_ID, SHEET_NAME);
+    service = new SpreadsheetService();
   });
 
-  it('レコードを正しくスプレッドシートに追加できるべき', () => {
+  it('テンプレートをコピーして指定のフォルダに保存し、レコードを流し込めるべき', () => {
+    const templateId = 'template-id';
     const record = {
       applicationDate: new Date(2026, 0, 29),
       userEmail: 'taro.tanaka@example.com',
+      userName: '田中 太郎',
       targetMonth: '2026-01',
       unitPrice: 1000,
       daysCount: 5,
@@ -34,18 +63,15 @@ describe('SpreadsheetService', () => {
       dateList: '2026/01/20, 2026/01/21',
     };
 
-    service.saveRecord(record);
+    const url = service.exportToTemplate(templateId, record);
 
-    expect(mockOpenById).toHaveBeenCalledWith(SPREADSHEET_ID);
-    expect(mockGetSheetByName).toHaveBeenCalledWith(SHEET_NAME);
-    expect(mockAppendRow).toHaveBeenCalledWith([
-      record.applicationDate,
-      record.userEmail,
-      record.targetMonth,
-      record.unitPrice,
-      record.daysCount,
-      record.totalAmount,
-      record.dateList,
-    ]);
+    expect(url).toBe('https://example.com/spreadsheet');
+    expect(mockGetFileById).toHaveBeenCalledWith(templateId);
+    expect(mockMakeCopy).toHaveBeenCalledWith(`通勤費精算_${record.targetMonth}_田中 太郎`, expect.anything());
+    expect(mockOpen).toHaveBeenCalledWith('mock-copy-file');
+    
+    // テンプレートの形式に沿った流し込み確認
+    expect(mockGetRange).toHaveBeenCalledWith('A2');
+    expect(mockSetRangeValue).toHaveBeenCalledWith('田中 太郎');
   });
 });
