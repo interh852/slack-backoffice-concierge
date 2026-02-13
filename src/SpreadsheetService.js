@@ -1,11 +1,32 @@
 if (typeof require !== 'undefined') {
-  var { TEMPLATE_CELLS } = require('./Constants');
+  var { TEMPLATE_CELLS, EXPORT_FOLDER_PATH } = require('./Constants');
 }
 
 /**
  * スプレッドシート操作を行うクラス
  */
 function SpreadsheetService() {}
+
+/**
+ * 指定されたパスのフォルダを取得、なければ作成します。
+ * @param {string} pathString "folder1/folder2" 形式のパス
+ * @returns {GoogleAppsScript.Drive.Folder}
+ */
+SpreadsheetService.prototype.getOrCreateFolder = function (pathString) {
+  var names = pathString.split('/');
+  var folder = DriveApp.getRootFolder();
+  for (var i = 0; i < names.length; i++) {
+    var name = names[i];
+    if (name === '') continue;
+    var folders = folder.getFoldersByName(name);
+    if (folders.hasNext()) {
+      folder = folders.next();
+    } else {
+      folder = folder.createFolder(name);
+    }
+  }
+  return folder;
+};
 
 /**
  * テンプレートをコピーしてレコードを流し込み、個人のDriveに保存します。
@@ -18,15 +39,19 @@ SpreadsheetService.prototype.exportToTemplate = function (templateId, record) {
     var userName = record.userEmail.split('@')[0];
     var fileName = '通勤費精算_' + record.targetMonth + '_' + userName;
 
-    // 1. テンプレートをコピー
-    var templateFile = DriveApp.getFileById(templateId);
-    var copyFile = templateFile.makeCopy(fileName);
+    // 1. 保存先フォルダの取得・作成
+    var folderPath = typeof EXPORT_FOLDER_PATH !== 'undefined' ? EXPORT_FOLDER_PATH : 'backoffice-concierge/通勤費';
+    var targetFolder = this.getOrCreateFolder(folderPath);
 
-    // 2. コピーしたスプレッドシートを開く
+    // 2. テンプレートをコピー
+    var templateFile = DriveApp.getFileById(templateId);
+    var copyFile = templateFile.makeCopy(fileName, targetFolder);
+
+    // 3. コピーしたスプレッドシートを開く
     var spreadsheet = SpreadsheetApp.open(copyFile);
     var sheet = spreadsheet.getSheets()[0]; // テンプレートは最初のシートを使用
 
-    // 3. 値を流し込む
+    // 4. 値を流し込む
     // セル番地は Constants.js の TEMPLATE_CELLS を使用
     var cells = typeof TEMPLATE_CELLS !== 'undefined' ? TEMPLATE_CELLS : {
       USER_NAME: 'A2',

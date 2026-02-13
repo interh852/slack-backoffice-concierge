@@ -28,8 +28,18 @@ const mockGetFileById = jest.fn().mockReturnValue({
   makeCopy: mockMakeCopy,
 });
 
+// フォルダモック
+const mockFolder = {
+  getFoldersByName: jest.fn().mockReturnValue({
+    hasNext: jest.fn().mockReturnValue(false),
+    next: jest.fn(),
+  }),
+  createFolder: jest.fn().mockReturnThis(),
+};
+
 global.DriveApp = {
   getFileById: mockGetFileById,
+  getRootFolder: jest.fn().mockReturnValue(mockFolder),
 };
 
 describe('SpreadsheetService', () => {
@@ -40,7 +50,7 @@ describe('SpreadsheetService', () => {
     service = new SpreadsheetService();
   });
 
-  it('テンプレートをコピーしてレコードを流し込めるべき', () => {
+  it('テンプレートをコピーして指定のフォルダに保存し、レコードを流し込めるべき', () => {
     const templateId = 'template-id';
     const record = {
       applicationDate: new Date(2026, 0, 29),
@@ -56,8 +66,12 @@ describe('SpreadsheetService', () => {
 
     expect(url).toBe('https://example.com/spreadsheet');
     expect(mockGetFileById).toHaveBeenCalledWith(templateId);
-    expect(mockMakeCopy).toHaveBeenCalledWith(`通勤費精算_${record.targetMonth}_taro.tanaka`);
+    expect(mockMakeCopy).toHaveBeenCalledWith(`通勤費精算_${record.targetMonth}_taro.tanaka`, expect.anything());
     expect(mockOpen).toHaveBeenCalledWith('mock-copy-file');
+    
+    // フォルダ作成の呼び出し確認
+    expect(mockFolder.createFolder).toHaveBeenCalledWith('backoffice-concierge');
+    expect(mockFolder.createFolder).toHaveBeenCalledWith('通勤費');
     
     // テンプレートの形式に沿った流し込み確認
     expect(mockGetRange).toHaveBeenCalledWith('A2');

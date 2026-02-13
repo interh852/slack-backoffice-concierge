@@ -22,6 +22,9 @@ var COMMUTE_UNIT_PRICE = 1000;
 // 設定用スプレッドシート（モデルやプロンプトの管理用）
 var CONFIG_SHEET_NAME = '情報';
 
+// 保存先フォルダのパス
+var EXPORT_FOLDER_PATH = 'backoffice-concierge/通勤費';
+
 // テンプレートのセル番地
 var TEMPLATE_CELLS = {
   USER_NAME: 'A2',
@@ -65,6 +68,7 @@ if (typeof module !== 'undefined') {
     STATE_WAITING_FOR_AMOUNT,
     COMMUTE_UNIT_PRICE,
     CONFIG_SHEET_NAME,
+    EXPORT_FOLDER_PATH,
     TEMPLATE_CELLS,
     getSpreadsheetId,
     getTemplateSpreadsheetId,
