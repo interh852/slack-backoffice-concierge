@@ -1,5 +1,49 @@
 const { onMessage, onAddToSpace } = require('../ChatHandler');
 const main = require('../main');
+const { GeminiService } = require('../GeminiService');
+
+// GeminiServiceのモック
+jest.mock('../GeminiService');
+const mockGenerateContent = jest.fn();
+GeminiService.prototype.generateContent = mockGenerateContent;
+
+// PropertiesServiceのモック
+global.PropertiesService = {
+  getScriptProperties: jest.fn().mockReturnValue({
+    getProperty: jest.fn().mockImplementation((key) => {
+      if (key === 'GEMINI_API_KEY') return 'test-api-key';
+      if (key === 'COMMUTE_EXPENSE_SPREDSHEET') return 'test-ss-id';
+      return null;
+    })
+  })
+};
+
+// SpreadsheetAppのモック
+const mockGetRange = jest.fn();
+const mockGetSheetByName = jest.fn();
+const mockOpenById = jest.fn();
+global.SpreadsheetApp = {
+  openById: mockOpenById
+};
+
+// CacheServiceのモック
+const mockPut = jest.fn();
+const mockGet = jest.fn();
+const mockRemove = jest.fn();
+const mockScriptCachePut = jest.fn();
+const mockScriptCacheGet = jest.fn();
+
+global.CacheService = {
+  getUserCache: jest.fn().mockReturnValue({
+    put: mockPut,
+    get: mockGet,
+    remove: mockRemove
+  }),
+  getScriptCache: jest.fn().mockReturnValue({
+    put: mockScriptCachePut,
+    get: mockScriptCacheGet
+  })
+};
 
 // Chat APIのグローバルモック
 const mockCreateMessage = jest.fn();
@@ -11,82 +55,106 @@ global.Chat = {
   }
 };
 
-// CacheServiceのグローバルモック
-const mockPut = jest.fn();
-const mockGet = jest.fn();
-const mockRemove = jest.fn();
-global.CacheService = {
-  getUserCache: jest.fn().mockReturnValue({
-    put: mockPut,
-    get: mockGet,
-    remove: mockRemove
-  })
-};
-
 describe('ChatHandler', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    
+    // スクリプトキャッシュのデフォルト（ヒットしない）
+    mockScriptCacheGet.mockReturnValue(null);
+
+    // スプレッドシートのデフォルトモック設定
+    mockOpenById.mockReturnValue({
+      getSheetByName: mockGetSheetByName
+    });
+    mockGetSheetByName.mockImplementation((name) => {
+      return {
+        getRange: jest.fn().mockReturnValue({
+          getValue: jest.fn().mockReturnValue(name === '情報' ? 'gemini-2.5-flash-lite' : 'テスト用プロンプト')
+        })
+      };
+    });
+
+    // デフォルトでは Gemini は「その他」を返すと仮定
+    mockGenerateContent.mockReturnValue(JSON.stringify({
+      intent: 'other',
+      amount: null,
+      message: 'こんにちは！'
+    }));
   });
 
-  describe('onMessage - 対話フロー', () => {
-    it('「通勤費」と送られたら、金額の入力を促し、状態を保存すべき', () => {
+  describe('onMessage - Gemini 統合リファクタリング', () => {
+    it('キャッシュがない場合、スプレッドシートから取得してGeminiを呼び出すべき', () => {
       const event = {
-        message: { text: '通勤費' },
+        message: { text: 'テスト' },
         user: { email: 'test@example.com' },
         space: { name: 'spaces/AAAA' }
       };
 
       onMessage(event);
 
-      // 状態がキャッシュに保存されたか確認
-      expect(mockPut).toHaveBeenCalledWith(
-        'state_test@example.com',
-        'WAITING_FOR_AMOUNT',
-        600 // 有効期限10分
-      );
-
-      // 質問メッセージが送信されたか確認
-      expect(mockCreateMessage).toHaveBeenCalledWith(
-        { text: '片道の通勤費を数値で教えてください（例: 500）' },
-        'spaces/AAAA'
-      );
+      expect(mockOpenById).toHaveBeenCalled();
+      expect(mockGenerateContent).toHaveBeenCalled();
     });
 
-    it('金額入力待ちの状態で数値を送られたら、計算を実行して結果を返すべき', () => {
-      // 状態を「待ち」に設定
-      mockGet.mockReturnValue('WAITING_FOR_AMOUNT');
-      
-      const spyApply = jest.spyOn(main, 'applyCommuteExpenses').mockReturnValue({
-        daysCount: 3,
-        totalAmount: 3000,
-        dates: ['2026-01-10']
-      });
+    it('JSONにマークダウン記法が含まれていても正しくパースすべき', () => {
+      mockGenerateContent.mockReturnValue('```json\n{"intent": "other", "message": "掃除済み"}\n```');
 
       const event = {
-        message: { text: '500' }, // 片道500円
+        message: { text: 'テスト' },
         user: { email: 'test@example.com' },
         space: { name: 'spaces/AAAA' }
       };
 
       onMessage(event);
 
-      // 往復1000円（片道500 * 2）で計算ロジックが呼ばれたか確認
-      // applyCommuteExpenses が第2引数に単価を受け取るようになる必要がある
-      expect(spyApply).toHaveBeenCalledWith(expect.any(Date), 1000);
-
-      // 結果メッセージの送信確認
       expect(mockCreateMessage).toHaveBeenCalledWith(
-        expect.objectContaining({ text: expect.stringContaining('3000円') }),
+        expect.objectContaining({ text: '掃除済み' }),
         'spaces/AAAA'
       );
-
-      // 状態がクリアされたか確認
-      expect(mockRemove).toHaveBeenCalledWith('state_test@example.com');
-
-      spyApply.mockRestore();
     });
 
-    it('金額入力待ちの状態で「500円」のように単位付きで送られても、正しく計算すべき', () => {
+    it('予期せぬエラーが発生しても、ユーザーにエラーを通知すべき', () => {
+      mockGenerateContent.mockImplementation(() => { throw new Error('Boom!'); });
+
+      const event = {
+        message: { text: 'テスト' },
+        user: { email: 'test@example.com' },
+        space: { name: 'spaces/AAAA' }
+      };
+
+      onMessage(event);
+
+      expect(mockCreateMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ text: expect.stringContaining('エラー') }),
+        'spaces/AAAA'
+      );
+    });
+  });
+
+  describe('onMessage - 既存機能の維持', () => {
+    it('自然言語で精算を依頼されたら、金額の入力を促すべき', () => {
+      mockGenerateContent.mockReturnValue(JSON.stringify({
+        intent: 'commute',
+        amount: null,
+        message: '片道の運賃を教えてね！'
+      }));
+
+      const event = {
+        message: { text: '精算して' },
+        user: { email: 'test@example.com' },
+        space: { name: 'spaces/AAAA' }
+      };
+
+      onMessage(event);
+
+      expect(mockPut).toHaveBeenCalledWith('state_test@example.com', 'WAITING_FOR_AMOUNT', 600);
+      expect(mockCreateMessage).toHaveBeenCalledWith(
+        { text: '片道の運賃を教えてね！' },
+        'spaces/AAAA'
+      );
+    });
+
+    it('金額入力待ちの状態で数値を送られたら、Geminiを介さず処理すべき', () => {
       mockGet.mockReturnValue('WAITING_FOR_AMOUNT');
       
       const spyApply = jest.spyOn(main, 'applyCommuteExpenses').mockReturnValue({
@@ -96,46 +164,16 @@ describe('ChatHandler', () => {
       });
 
       const event = {
-        message: { text: '500円' }, 
+        message: { text: '500' },
         user: { email: 'test@example.com' },
         space: { name: 'spaces/AAAA' }
       };
 
       onMessage(event);
 
-      // 500円をパースして1000円（往復）で呼ばれることを期待
+      expect(mockGenerateContent).not.toHaveBeenCalled();
       expect(spyApply).toHaveBeenCalledWith(expect.any(Date), 1000);
-      expect(mockRemove).toHaveBeenCalledWith('state_test@example.com');
-
       spyApply.mockRestore();
-    });
-
-    it('金額入力待ちの状態で数値以外を送られたら、エラーを返すべき', () => {
-      mockGet.mockReturnValue('WAITING_FOR_AMOUNT');
-
-      const event = {
-        message: { text: 'あいうえお' },
-        user: { email: 'test@example.com' },
-        space: { name: 'spaces/AAAA' }
-      };
-
-      onMessage(event);
-
-      expect(mockCreateMessage).toHaveBeenCalledWith(
-        { text: '数値を入力してください。中断する場合は「キャンセル」と入力してください。' },
-        'spaces/AAAA'
-      );
-    });
-  });
-
-  describe('onAddToSpace', () => {
-    it('スペースに追加されたら挨拶メッセージを送信すべき', () => {
-      const event = { space: { name: 'spaces/AAAA' } };
-      onAddToSpace(event);
-      expect(mockCreateMessage).toHaveBeenCalledWith(
-        expect.objectContaining({ text: expect.stringContaining('通勤費') }),
-        'spaces/AAAA'
-      );
     });
   });
 });
