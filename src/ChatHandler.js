@@ -1,6 +1,7 @@
 if (typeof require !== 'undefined') {
   var main = require('./main');
   var { CHAT_KEYWORD, STATE_KEY_PREFIX, STATE_WAITING_FOR_AMOUNT } = require('./Constants');
+  var { GeminiService } = require('./GeminiService');
 }
 
 /**
@@ -21,37 +22,82 @@ function onMessage(event) {
   var stateKey = STATE_KEY_PREFIX + userEmail;
   var currentState = cache.get(stateKey);
 
-  // 金額入力待ちの状態チェック
+  // 金額入力待ちの状態チェック（ここはGeminiを通さず高速に処理）
   if (currentState === STATE_WAITING_FOR_AMOUNT) {
     handleAmountInput(messageText, spaceName, stateKey, cache);
     return;
   }
 
-  // キーワードチェック（新規フロー開始）
-  var keyword = typeof CHAT_KEYWORD !== 'undefined' ? CHAT_KEYWORD : '通勤費';
-  if (messageText.indexOf(keyword) !== -1) {
-    var waitingState =
-      typeof STATE_WAITING_FOR_AMOUNT !== 'undefined'
-        ? STATE_WAITING_FOR_AMOUNT
-        : 'WAITING_FOR_AMOUNT';
-    cache.put(stateKey, waitingState, 600); // 10分間有効
-    Chat.Spaces.Messages.create(
-      { text: '片道の通勤費を数値で教えてください（例: 500）' },
-      spaceName
-    );
-    return;
+  // Geminiを使って意図解析
+  var gemini = new GeminiService();
+  var systemInstruction = 
+    'ユーザーのメッセージから以下の情報をJSON形式で抽出してください。\n' +
+    '1. intent: 「commute」（交通費精算の依頼）か「other」（それ以外・雑談）\n' +
+    '2. amount: メッセージに含まれる片道運賃（数値のみ）。抽出できなければ null。\n' +
+    '3. message: ユーザーへの返答メッセージ。丁寧かつ簡潔に。\n\n' +
+    '精算の依頼だが金額が不明な場合は、片道の運賃を尋ねるメッセージにしてください。\n' +
+    '金額が含まれている場合は、その金額で精算を開始する旨を伝えてください。';
+  
+  var responseText = gemini.generateContent(messageText, systemInstruction);
+  var result;
+  try {
+    result = JSON.parse(responseText);
+  } catch (e) {
+    console.error('Gemini response parse error:', responseText);
+    result = { intent: 'other', message: '申し訳ありません、メッセージを正しく理解できませんでした。' };
   }
 
-  // それ以外のメッセージ
-  Chat.Spaces.Messages.create(
-    {
-      text:
-        '「' +
-        keyword +
-        '」という言葉を含めて話しかけてください。自動でカレンダーを集計して申請します。',
-    },
-    spaceName
-  );
+  // 意図に応じた処理
+  if (result.intent === 'commute') {
+    if (result.amount) {
+      // 金額が含まれている場合は即座に精算
+      Chat.Spaces.Messages.create({ text: result.message }, spaceName);
+      executeCommuteExpense(result.amount, spaceName, stateKey, cache);
+    } else {
+      // 金額がない場合は入力待ち状態にする
+      var waitingState = typeof STATE_WAITING_FOR_AMOUNT !== 'undefined' ? STATE_WAITING_FOR_AMOUNT : 'WAITING_FOR_AMOUNT';
+      cache.put(stateKey, waitingState, 600);
+      Chat.Spaces.Messages.create({ text: result.message }, spaceName);
+    }
+  } else {
+    // それ以外（雑談など）
+    Chat.Spaces.Messages.create({ text: result.message }, spaceName);
+  }
+}
+
+/**
+ * 通勤費精算を実行します
+ */
+function executeCommuteExpense(amount, spaceName, stateKey, cache) {
+  try {
+    var roundTripAmount = amount * 2;
+    var result;
+    if (typeof main !== 'undefined' && main.applyCommuteExpenses) {
+      result = main.applyCommuteExpenses(new Date(), roundTripAmount);
+    } else {
+      result = applyCommuteExpenses(new Date(), roundTripAmount);
+    }
+
+    var message =
+      '✅ 通勤費の申請を受け付けました。\n\n' +
+      '出社日: ' +
+      (result.dates ? result.dates.join(', ') : 'なし') +
+      ' (' +
+      result.daysCount +
+      '日間)\n' +
+      '合計金額: ' +
+      result.totalAmount +
+      '円';
+
+    Chat.Spaces.Messages.create({ text: message }, spaceName);
+    cache.remove(stateKey);
+  } catch (error) {
+    console.error('Error in executeCommuteExpense:', error);
+    Chat.Spaces.Messages.create(
+      { text: '❌ エラーが発生しました: ' + (error.message || String(error)) },
+      spaceName
+    );
+  }
 }
 
 /**
@@ -64,7 +110,7 @@ function handleAmountInput(messageText, spaceName, stateKey, cache) {
     return;
   }
 
-  // 文字列から数字部分だけを抽出（例: "500円" -> "500", "¥ 1,000" -> "1000"）
+  // 文字列から数字部分だけを抽出
   var numericText = messageText.replace(/[^\d]/g, '');
   var amount = parseInt(numericText, 10);
 
@@ -76,35 +122,7 @@ function handleAmountInput(messageText, spaceName, stateKey, cache) {
     return;
   }
 
-  try {
-    var roundTripAmount = amount * 2;
-    var result;
-    if (typeof main !== 'undefined' && main.applyCommuteExpenses) {
-      result = main.applyCommuteExpenses(new Date(), roundTripAmount);
-    } else {
-      result = applyCommuteExpenses(new Date(), roundTripAmount);
-    }
-
-    var message =
-      '✅ 通勤費の申請を受け付けました！\n\n' +
-      '出社日: ' +
-      (result.dates ? result.dates.join(', ') : 'なし') +
-      ' (' +
-      result.daysCount +
-      '日間)\n' +
-      '通勤費: ' +
-      result.totalAmount +
-      '円';
-
-    Chat.Spaces.Messages.create({ text: message }, spaceName);
-    cache.remove(stateKey);
-  } catch (error) {
-    console.error('Error in handleAmountInput:', error);
-    Chat.Spaces.Messages.create(
-      { text: '❌ エラーが発生しました: ' + (error.message || String(error)) },
-      spaceName
-    );
-  }
+  executeCommuteExpense(amount, spaceName, stateKey, cache);
 }
 
 /**
@@ -140,15 +158,12 @@ function extractEventData(event) {
  */
 function onAddedToSpace(event) {
   var data = extractEventData(event);
-  var keyword = typeof CHAT_KEYWORD !== 'undefined' ? CHAT_KEYWORD : '通勤費';
-
   if (data.spaceName) {
     Chat.Spaces.Messages.create(
       {
         text:
-          'こんにちは！交通費精算コンシェルジュです。「' +
-          keyword +
-          '」と話しかけると、自動でカレンダーを集計して申請します。',
+          '交通費精算コンシェルジュです。カレンダーの「出社」イベントを集計して交通費を申請します。\n' +
+          '「精算をお願い」や「片道600円で精算して」のように話しかけてください。',
       },
       data.spaceName
     );
@@ -161,40 +176,5 @@ function onRemovedFromSpace(event) {
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { onMessage, onAddedToSpace: onAddedToSpace };
-}
-
-/**
- * ボットがスペースに追加された時のハンドラ
- */
-function onAddedToSpace(event) {
-  var spaceName = '';
-  if (event.space) {
-    spaceName = event.space.name;
-  } else if (event.chat && event.chat.messagePayload && event.chat.messagePayload.space) {
-    spaceName = event.chat.messagePayload.space.name;
-  }
-
-  var keyword = typeof CHAT_KEYWORD !== 'undefined' ? CHAT_KEYWORD : '通勤費';
-
-  if (spaceName) {
-    Chat.Spaces.Messages.create(
-      {
-        text:
-          'こんにちは！交通費精算コンシェルジュです。「' +
-          keyword +
-          '」と話しかけると、自動でカレンダーを集計して申請します。',
-      },
-      spaceName
-    );
-  }
-  return;
-}
-
-function onRemovedFromSpace(event) {
-  console.log('Bot removed');
-}
-
-if (typeof module !== 'undefined') {
-  module.exports = { onMessage, onAddToSpace: onAddedToSpace };
+  module.exports = { onMessage, onAddedToSpace: onAddedToSpace, onAddToSpace: onAddedToSpace };
 }
