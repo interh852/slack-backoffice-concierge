@@ -13,22 +13,15 @@ if (typeof require !== 'undefined') {
 function getSettlementPeriod(baseDate) {
   var year = baseDate.getFullYear();
   var month = baseDate.getMonth();
-  var day = baseDate.getDate();
-
-  var endYear = year;
-  var endMonth = month;
 
   // CLOSING_DAY はグローバルまたは require 経由で取得
   // GAS上ではグローバル変数として参照できる
   var closing = typeof CLOSING_DAY !== 'undefined' ? CLOSING_DAY : 15;
   var start = typeof START_DAY !== 'undefined' ? START_DAY : 16;
 
-  if (day <= closing) {
-    endMonth -= 1;
-  }
-
-  var endDate = new Date(endYear, endMonth, closing);
-  var startDate = new Date(endDate.getFullYear(), endDate.getMonth() - 1, start);
+  // 常に基準日の当月15日を終了日、前月16日を開始日とする
+  var endDate = new Date(year, month, closing);
+  var startDate = new Date(year, month - 1, start);
 
   return { startDate: startDate, endDate: endDate };
 }
