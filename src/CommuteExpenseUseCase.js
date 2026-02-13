@@ -61,15 +61,8 @@ CommuteExpenseUseCase.prototype.execute = function (baseDate, unitPrice) {
       dateList: summary.dates.join(', '),
     });
   } else {
-    spreadsheetService.saveRecord({
-      applicationDate: baseDate,
-      userEmail: userEmail,
-      targetMonth: targetMonthStr,
-      unitPrice: currentUnitPrice,
-      daysCount: summary.count,
-      totalAmount: totalAmount,
-      dateList: summary.dates.join(', '),
-    });
+    // テンプレートがない場合は何もしない（リファクタリングにより追記処理を廃止）
+    console.warn('TEMPLATE_SPREADSHEET_ID is not defined. No record was saved.');
   }
 
   return {
