@@ -15,6 +15,7 @@ const mockOpenById = jest.fn().mockReturnValue({
 });
 const mockOpen = jest.fn().mockReturnValue({
   getSheetByName: mockGetSheetByName,
+  getUrl: jest.fn().mockReturnValue('https://example.com/spreadsheet'),
 });
 
 global.SpreadsheetApp = {
@@ -79,8 +80,9 @@ describe('SpreadsheetService', () => {
       dateList: '2026/01/20, 2026/01/21',
     };
 
-    service.exportToTemplate(templateId, record);
+    const url = service.exportToTemplate(templateId, record);
 
+    expect(url).toBe('https://example.com/spreadsheet');
     expect(mockGetFileById).toHaveBeenCalledWith(templateId);
     expect(mockMakeCopy).toHaveBeenCalledWith(`通勤費精算_${record.targetMonth}_taro.tanaka`);
     expect(mockOpen).toHaveBeenCalledWith('mock-copy-file');
