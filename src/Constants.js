@@ -22,7 +22,6 @@ var COMMUTE_UNIT_PRICE = 1000;
 // スプレッドシート設定
 var SHEET_NAME = 'シート1';
 var CONFIG_SHEET_NAME = '情報';
-var TEMPLATE_SPREADSHEET_ID = '1aps-6ZNt-6xBVV_dmp9pL2oHn6dMKJ88DcKCVva8_2w';
 
 /**
  * スプレッドシートIDを取得する
@@ -35,7 +34,19 @@ function getSpreadsheetId() {
   return PropertiesService.getScriptProperties().getProperty('COMMUTE_EXPENSE_SPREDSHEET');
 }
 
+/**
+ * テンプレートスプレッドシートIDを取得する
+ * @returns {string} テンプレートスプレッドシートID
+ */
+function getTemplateSpreadsheetId() {
+  if (typeof PropertiesService === 'undefined') {
+    return '';
+  }
+  return PropertiesService.getScriptProperties().getProperty('COMMUTE_TEMPLATE_SPREADSHEET');
+}
+
 var SPREADSHEET_ID = getSpreadsheetId();
+var TEMPLATE_SPREADSHEET_ID = getTemplateSpreadsheetId();
 
 // Node.js環境でのテスト用
 if (typeof module !== 'undefined') {
@@ -50,6 +61,8 @@ if (typeof module !== 'undefined') {
     SHEET_NAME,
     CONFIG_SHEET_NAME,
     SPREADSHEET_ID,
-    getSpreadsheetId, // テスト用に残しておく
+    TEMPLATE_SPREADSHEET_ID,
+    getSpreadsheetId,
+    getTemplateSpreadsheetId,
   };
 }

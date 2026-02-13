@@ -47,17 +47,22 @@ SpreadsheetService.prototype.exportToTemplate = function (templateId, record) {
 
   // 2. コピーしたスプレッドシートを開く
   var spreadsheet = SpreadsheetApp.open(copyFile);
-  var sheet = spreadsheet.getSheetByName(this.sheetName) || spreadsheet.getSheets()[0];
+  var sheet = spreadsheet.getSheets()[0]; // テンプレートは最初のシートを使用
 
-  // 3. 値を流し込む（セルの位置は仮定）
+  // 3. 値を流し込む
+  // A2: 名前
+  // B2: 有効期限内の定期券の有無
+  // D2: 片道交通費
+  // E2: 出社日数
+  // F2: 交通費支給額
+  // G2: 実際に出社した日付記入欄
   var cellMapping = {
-    B2: record.applicationDate,
-    B3: userName,
-    B4: record.targetMonth,
-    B5: record.unitPrice,
-    B6: record.daysCount,
-    B7: record.totalAmount,
-    B8: record.dateList,
+    A2: userName,
+    B2: '無',
+    D2: record.unitPrice / 2,
+    E2: record.daysCount,
+    F2: record.totalAmount,
+    G2: record.dateList,
   };
 
   for (var cell in cellMapping) {

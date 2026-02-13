@@ -13,8 +13,15 @@ const mockGetSheetByName = jest.fn().mockReturnValue({
 const mockOpenById = jest.fn().mockReturnValue({
   getSheetByName: mockGetSheetByName,
 });
+
+const mockSheet = {
+  appendRow: mockAppendRow,
+  getRange: mockGetRange,
+};
+
 const mockOpen = jest.fn().mockReturnValue({
   getSheetByName: mockGetSheetByName,
+  getSheets: jest.fn().mockReturnValue([mockSheet]),
   getUrl: jest.fn().mockReturnValue('https://example.com/spreadsheet'),
 });
 
@@ -86,8 +93,18 @@ describe('SpreadsheetService', () => {
     expect(mockGetFileById).toHaveBeenCalledWith(templateId);
     expect(mockMakeCopy).toHaveBeenCalledWith(`通勤費精算_${record.targetMonth}_taro.tanaka`);
     expect(mockOpen).toHaveBeenCalledWith('mock-copy-file');
-    // セルへの流し込み（セルの位置は仮定）
-    expect(mockGetRange).toHaveBeenCalled();
-    expect(mockSetRangeValue).toHaveBeenCalled();
+    
+    // テンプレートの形式に沿った流し込み確認
+    // A2: 名前, D2: 片道運賃, E2: 出社日数, F2: 合計金額, G2: 日付リスト
+    expect(mockGetRange).toHaveBeenCalledWith('A2');
+    expect(mockSetRangeValue).toHaveBeenCalledWith('taro.tanaka');
+    expect(mockGetRange).toHaveBeenCalledWith('D2');
+    expect(mockSetRangeValue).toHaveBeenCalledWith(500); // 片道
+    expect(mockGetRange).toHaveBeenCalledWith('E2');
+    expect(mockSetRangeValue).toHaveBeenCalledWith(5);
+    expect(mockGetRange).toHaveBeenCalledWith('F2');
+    expect(mockSetRangeValue).toHaveBeenCalledWith(5000);
+    expect(mockGetRange).toHaveBeenCalledWith('G2');
+    expect(mockSetRangeValue).toHaveBeenCalledWith('2026/01/20, 2026/01/21');
   });
 });
