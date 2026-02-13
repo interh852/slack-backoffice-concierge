@@ -13,18 +13,26 @@ jest.mock('../CalendarService', () => ({
 }));
 
 const mockSaveRecord = jest.fn();
+const mockExportToTemplate = jest.fn();
 const mockSpreadsheetServiceInstance = {
   saveRecord: mockSaveRecord,
+  exportToTemplate: mockExportToTemplate,
 };
 jest.mock('../SpreadsheetService', () => ({
   SpreadsheetService: jest.fn(() => mockSpreadsheetServiceInstance)
+}));
+
+jest.mock('../Constants', () => ({
+  COMMUTE_UNIT_PRICE: 1000,
+  SPREADSHEET_ID: 'test-spreadsheet-id',
+  SHEET_NAME: 'test-sheet-name',
+  TEMPLATE_SPREADSHEET_ID: 'test-template-id',
 }));
 
 // その後に require
 const { CommuteExpenseUseCase } = require('../CommuteExpenseUseCase');
 const { CalendarService } = require('../CalendarService');
 const { SpreadsheetService } = require('../SpreadsheetService');
-// PeriodCalculator は require せずにモック関数を直接使う
 
 // GASのグローバルオブジェクトモック
 const mockGetActiveUser = jest.fn();
@@ -61,6 +69,7 @@ describe('CommuteExpenseUseCase', () => {
       count: mockDaysCount,
       dates: mockDates
     });
+    mockExportToTemplate.mockReturnValue('https://example.com/spreadsheet');
 
     const result = useCase.execute(mockDate, unitPrice);
 
@@ -68,7 +77,8 @@ describe('CommuteExpenseUseCase', () => {
     expect(result).toEqual({
       daysCount: mockDaysCount,
       totalAmount: 2000,
-      dates: mockDates
+      dates: mockDates,
+      spreadsheetUrl: 'https://example.com/spreadsheet'
     });
 
     // 呼び出し検証
@@ -77,7 +87,7 @@ describe('CommuteExpenseUseCase', () => {
     expect(CalendarService).toHaveBeenCalled();
     expect(mockGetCommuteSummary).toHaveBeenCalledWith(mockStartDate, mockEndDate);
     expect(SpreadsheetService).toHaveBeenCalled();
-    expect(mockSaveRecord).toHaveBeenCalledWith(expect.objectContaining({
+    expect(mockExportToTemplate).toHaveBeenCalledWith('test-template-id', expect.objectContaining({
       userEmail: mockEmail,
       unitPrice: unitPrice,
       totalAmount: 2000
