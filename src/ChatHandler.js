@@ -15,6 +15,7 @@ function onMessage(event) {
     var messageText = data.text;
     var spaceName = data.spaceName;
     var userEmail = data.userEmail;
+    var userName = data.userName;
 
     if (!spaceName) return;
 
@@ -24,7 +25,7 @@ function onMessage(event) {
 
     // 金額入力待ちの状態チェック
     if (currentState === STATE_WAITING_FOR_AMOUNT) {
-      handleAmountInput(messageText, spaceName, stateKey, cache);
+      handleAmountInput(messageText, spaceName, userName, userEmail, stateKey, cache);
       return;
     }
 
@@ -48,7 +49,7 @@ function onMessage(event) {
     if (result.intent === 'commute') {
       if (result.amount) {
         Chat.Spaces.Messages.create({ text: result.message }, spaceName);
-        executeCommuteExpense(result.amount, spaceName, stateKey, cache);
+        executeCommuteExpense(result.amount, spaceName, userName, userEmail, stateKey, cache);
       } else {
         var waitingState = typeof STATE_WAITING_FOR_AMOUNT !== 'undefined' ? STATE_WAITING_FOR_AMOUNT : 'WAITING_FOR_AMOUNT';
         cache.put(stateKey, waitingState, 600);
@@ -109,14 +110,14 @@ function parseGeminiResponse(responseText) {
 /**
  * 通勤費精算を実行します
  */
-function executeCommuteExpense(amount, spaceName, stateKey, cache) {
+function executeCommuteExpense(amount, spaceName, userName, userEmail, stateKey, cache) {
   try {
     var roundTripAmount = amount * 2;
     var result;
     if (typeof main !== 'undefined' && main.applyCommuteExpenses) {
-      result = main.applyCommuteExpenses(new Date(), roundTripAmount);
+      result = main.applyCommuteExpenses(new Date(), roundTripAmount, userName, userEmail);
     } else {
-      result = applyCommuteExpenses(new Date(), roundTripAmount);
+      result = applyCommuteExpenses(new Date(), roundTripAmount, userName, userEmail);
     }
 
     var message =
@@ -148,7 +149,7 @@ function executeCommuteExpense(amount, spaceName, stateKey, cache) {
 /**
  * 金額入力を処理します
  */
-function handleAmountInput(messageText, spaceName, stateKey, cache) {
+function handleAmountInput(messageText, spaceName, userName, userEmail, stateKey, cache) {
   if (messageText === 'キャンセル') {
     cache.remove(stateKey);
     Chat.Spaces.Messages.create({ text: '処理を中断しました。' }, spaceName);
@@ -166,7 +167,7 @@ function handleAmountInput(messageText, spaceName, stateKey, cache) {
     return;
   }
 
-  executeCommuteExpense(amount, spaceName, stateKey, cache);
+  executeCommuteExpense(amount, spaceName, userName, userEmail, stateKey, cache);
 }
 
 /**
@@ -188,13 +189,20 @@ function extractEventData(event) {
   }
 
   var userEmail = '';
-  if (event.user && event.user.email) {
-    userEmail = event.user.email;
-  } else if (event.chat && event.chat.messagePayload && event.chat.messagePayload.user) {
-    userEmail = event.chat.messagePayload.user.email;
+  var userName = '';
+  
+  // ユーザー情報の取得を試みる
+  var user = event.user || 
+             (event.chat && event.chat.messagePayload && event.chat.messagePayload.message && event.chat.messagePayload.message.sender) ||
+             (event.chat && event.chat.messagePayload && event.chat.messagePayload.user) ||
+             (event.message && event.message.sender);
+
+  if (user) {
+    userEmail = user.email || '';
+    userName = user.displayName || '';
   }
 
-  return { text: text, spaceName: spaceName, userEmail: userEmail };
+  return { text: text, spaceName: spaceName, userEmail: userEmail, userName: userName };
 }
 
 /**

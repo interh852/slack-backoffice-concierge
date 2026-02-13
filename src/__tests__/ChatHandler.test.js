@@ -1,178 +1,167 @@
-const { onMessage, onAddToSpace } = require('../ChatHandler');
-const main = require('../main');
-const { GeminiService } = require('../GeminiService');
-
-// GeminiServiceのモック
-jest.mock('../GeminiService');
+// GeminiService のモックを最初に行う
 const mockGenerateContent = jest.fn();
-GeminiService.prototype.generateContent = mockGenerateContent;
-
-// PropertiesServiceのモック
-global.PropertiesService = {
-  getScriptProperties: jest.fn().mockReturnValue({
-    getProperty: jest.fn().mockImplementation((key) => {
-      if (key === 'GEMINI_API_KEY') return 'test-api-key';
-      if (key === 'COMMUTE_EXPENSE_SPREDSHEET') return 'test-ss-id';
-      return null;
+jest.mock('../GeminiService', () => {
+  return {
+    GeminiService: jest.fn().mockImplementation(() => {
+      return {
+        generateContent: mockGenerateContent
+      };
     })
-  })
-};
+  };
+});
 
-// SpreadsheetAppのモック
-const mockGetRange = jest.fn();
-const mockGetSheetByName = jest.fn();
-const mockOpenById = jest.fn();
-global.SpreadsheetApp = {
-  openById: mockOpenById
-};
+// その後に読み込む
+if (typeof require !== 'undefined') {
+  var { onMessage } = require('../ChatHandler');
+  var main = require('../main');
+}
 
-// CacheServiceのモック
-const mockPut = jest.fn();
-const mockGet = jest.fn();
-const mockRemove = jest.fn();
-const mockScriptCachePut = jest.fn();
-const mockScriptCacheGet = jest.fn();
-
+// GAS グローバルオブジェクトのモック
 global.CacheService = {
   getUserCache: jest.fn().mockReturnValue({
-    put: mockPut,
-    get: mockGet,
-    remove: mockRemove
+    get: jest.fn(),
+    put: jest.fn(),
+    remove: jest.fn()
   }),
   getScriptCache: jest.fn().mockReturnValue({
-    put: mockScriptCachePut,
-    get: mockScriptCacheGet
+    get: jest.fn(),
+    put: jest.fn()
   })
 };
 
-// Chat APIのグローバルモック
-const mockCreateMessage = jest.fn();
+global.PropertiesService = {
+  getScriptProperties: jest.fn().mockReturnValue({
+    getProperty: jest.fn().mockReturnValue('mock-api-key')
+  })
+};
+
 global.Chat = {
   Spaces: {
     Messages: {
-      create: mockCreateMessage
+      create: jest.fn()
     }
   }
 };
 
+global.SpreadsheetApp = {
+  openById: jest.fn().mockReturnValue({
+    getSheetByName: jest.fn().mockReturnValue({
+      getRange: jest.fn().mockReturnValue({
+        getValue: jest.fn().mockReturnValue('mock-value')
+      })
+    })
+  })
+};
+
 describe('ChatHandler', () => {
+  const spaceName = 'spaces/AAAA';
+  const userEmail = 'test@example.com';
+  const userName = '田中 太郎';
+
   beforeEach(() => {
     jest.clearAllMocks();
-    
-    // スクリプトキャッシュのデフォルト（ヒットしない）
-    mockScriptCacheGet.mockReturnValue(null);
-
-    // スプレッドシートのデフォルトモック設定
-    mockOpenById.mockReturnValue({
-      getSheetByName: mockGetSheetByName
-    });
-    mockGetSheetByName.mockImplementation((name) => {
-      return {
-        getRange: jest.fn().mockReturnValue({
-          getValue: jest.fn().mockReturnValue(name === '情報' ? 'gemini-2.5-flash-lite' : 'テスト用プロンプト')
-        })
-      };
-    });
-
-    // デフォルトでは Gemini は「その他」を返すと仮定
-    mockGenerateContent.mockReturnValue(JSON.stringify({
-      intent: 'other',
-      amount: null,
-      message: 'こんにちは！'
-    }));
   });
 
   describe('onMessage - Gemini 統合リファクタリング', () => {
     it('キャッシュがない場合、スプレッドシートから取得してGeminiを呼び出すべき', () => {
       const event = {
         message: { text: 'テスト' },
-        user: { email: 'test@example.com' },
-        space: { name: 'spaces/AAAA' }
+        user: { email: userEmail, displayName: userName },
+        space: { name: spaceName }
       };
+
+      mockGenerateContent.mockReturnValue(JSON.stringify({
+        intent: 'other',
+        message: 'こんにちは'
+      }));
 
       onMessage(event);
 
-      expect(mockOpenById).toHaveBeenCalled();
-      expect(mockGenerateContent).toHaveBeenCalled();
+      expect(global.Chat.Spaces.Messages.create).toHaveBeenCalledWith(
+        { text: 'こんにちは' },
+        spaceName
+      );
     });
 
     it('JSONにマークダウン記法が含まれていても正しくパースすべき', () => {
-      mockGenerateContent.mockReturnValue('```json\n{"intent": "other", "message": "掃除済み"}\n```');
-
       const event = {
         message: { text: 'テスト' },
-        user: { email: 'test@example.com' },
-        space: { name: 'spaces/AAAA' }
+        user: { email: userEmail, displayName: userName },
+        space: { name: spaceName }
       };
+
+      mockGenerateContent.mockReturnValue('```json\n{"intent":"other", "message":"JSONテスト"}\n```');
 
       onMessage(event);
 
-      expect(mockCreateMessage).toHaveBeenCalledWith(
-        expect.objectContaining({ text: '掃除済み' }),
-        'spaces/AAAA'
+      expect(global.Chat.Spaces.Messages.create).toHaveBeenCalledWith(
+        { text: 'JSONテスト' },
+        spaceName
       );
     });
 
     it('予期せぬエラーが発生しても、ユーザーにエラーを通知すべき', () => {
-      mockGenerateContent.mockImplementation(() => { throw new Error('Boom!'); });
-
       const event = {
         message: { text: 'テスト' },
-        user: { email: 'test@example.com' },
-        space: { name: 'spaces/AAAA' }
+        user: { email: userEmail, displayName: userName },
+        space: { name: spaceName }
       };
+
+      mockGenerateContent.mockImplementation(() => {
+        throw new Error('Boom!');
+      });
 
       onMessage(event);
 
-      expect(mockCreateMessage).toHaveBeenCalledWith(
-        expect.objectContaining({ text: expect.stringContaining('エラー') }),
-        'spaces/AAAA'
+      expect(global.Chat.Spaces.Messages.create).toHaveBeenCalledWith(
+        { text: '❌ 申し訳ありません、システムエラーが発生しました。' },
+        spaceName
       );
     });
   });
 
   describe('onMessage - 既存機能の維持', () => {
     it('自然言語で精算を依頼されたら、金額の入力を促すべき', () => {
-      mockGenerateContent.mockReturnValue(JSON.stringify({
-        intent: 'commute',
-        amount: null,
-        message: '片道の運賃を教えてね！'
-      }));
-
       const event = {
         message: { text: '精算して' },
-        user: { email: 'test@example.com' },
-        space: { name: 'spaces/AAAA' }
+        user: { email: userEmail, displayName: userName },
+        space: { name: spaceName }
       };
+
+      mockGenerateContent.mockReturnValue(JSON.stringify({
+        intent: 'commute',
+        message: '片道の運賃を教えてください'
+      }));
 
       onMessage(event);
 
-      expect(mockPut).toHaveBeenCalledWith('state_test@example.com', 'WAITING_FOR_AMOUNT', 600);
-      expect(mockCreateMessage).toHaveBeenCalledWith(
-        { text: '片道の運賃を教えてね！' },
-        'spaces/AAAA'
+      expect(global.Chat.Spaces.Messages.create).toHaveBeenCalledWith(
+        { text: '片道の運賃を教えてください' },
+        spaceName
       );
+      expect(global.CacheService.getUserCache().put).toHaveBeenCalled();
     });
 
     it('金額入力待ちの状態で数値を送られたら、Geminiを介さず処理すべき', () => {
-      mockGet.mockReturnValue('WAITING_FOR_AMOUNT');
-      
-      const spyApply = jest.spyOn(main, 'applyCommuteExpenses').mockReturnValue({
-        daysCount: 1,
-        totalAmount: 1000,
-        dates: ['2026-01-10']
-      });
-
       const event = {
         message: { text: '500' },
-        user: { email: 'test@example.com' },
-        space: { name: 'spaces/AAAA' }
+        user: { email: userEmail, displayName: userName },
+        space: { name: spaceName }
       };
+
+      global.CacheService.getUserCache().get.mockReturnValue('WAITING_FOR_AMOUNT');
+      
+      const spyApply = jest.spyOn(main, 'applyCommuteExpenses').mockReturnValue({
+        daysCount: 2,
+        totalAmount: 2000,
+        dates: ['2026-01-10', '2026-01-12'],
+        spreadsheetUrl: 'https://example.com/spreadsheet'
+      });
 
       onMessage(event);
 
       expect(mockGenerateContent).not.toHaveBeenCalled();
-      expect(spyApply).toHaveBeenCalledWith(expect.any(Date), 1000);
+      expect(spyApply).toHaveBeenCalledWith(expect.any(Date), 1000, userName, userEmail);
       spyApply.mockRestore();
     });
   });

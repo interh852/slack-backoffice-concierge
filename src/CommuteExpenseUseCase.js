@@ -13,32 +13,21 @@ function CommuteExpenseUseCase() {}
 /**
  * 通勤費を計算して保存する
  * @param {Date} baseDate 基準日
- * @param {number} unitPrice 単価（往復分、省略時は定数を使用）
+ * @param {number} unitPrice 単価（往復分）
+ * @param {string} userName ユーザー名
+ * @param {string} userEmail ユーザーのメールアドレス (必須)
  * @returns {Object} 計算結果 { daysCount, totalAmount, dates, spreadsheetUrl }
  */
-CommuteExpenseUseCase.prototype.execute = function (baseDate, unitPrice) {
-  console.log('CommuteExpenseUseCase.execute started');
+CommuteExpenseUseCase.prototype.execute = function (baseDate, unitPrice, userName, userEmail) {
   if (!baseDate) baseDate = new Date();
+  if (!userEmail) throw new Error('User email is required for commute expense application.');
 
   // 単価の決定
   var defaultPrice = typeof COMMUTE_UNIT_PRICE !== 'undefined' ? COMMUTE_UNIT_PRICE : 1000;
   var currentUnitPrice = typeof unitPrice === 'number' ? unitPrice : defaultPrice;
 
-  // 実行ユーザー情報の取得
-  var userEmail = Session.getActiveUser().getEmail();
-  var userName = userEmail.split('@')[0]; // フォールバック: メールのアカウント名
-
-  // People API を使ってフルネームの取得を試みる
-  try {
-    if (typeof People !== 'undefined' && People.People) {
-      var person = People.People.get('people/me', { personFields: 'names' });
-      if (person.names && person.names.length > 0) {
-        userName = person.names[0].displayName;
-      }
-    }
-  } catch (e) {
-    console.warn('Failed to get user name from People API:', e);
-  }
+  // ユーザー名の決定（空の場合はメールアドレスのプレフィックスを使用）
+  var resolvedUserName = userName || userEmail.split('@')[0];
 
   // 1. 精算期間の計算
   var period = getSettlementPeriod(baseDate);
@@ -63,7 +52,7 @@ CommuteExpenseUseCase.prototype.execute = function (baseDate, unitPrice) {
     spreadsheetUrl = spreadsheetService.exportToTemplate(templateId, {
       applicationDate: baseDate,
       userEmail: userEmail,
-      userName: userName,
+      userName: resolvedUserName,
       targetMonth: targetMonthStr,
       unitPrice: currentUnitPrice,
       daysCount: summary.count,
