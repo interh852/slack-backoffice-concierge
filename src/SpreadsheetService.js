@@ -36,7 +36,8 @@ SpreadsheetService.prototype.getOrCreateFolder = function (pathString) {
  */
 SpreadsheetService.prototype.exportToTemplate = function (templateId, record) {
   try {
-    var userName = record.userEmail.split('@')[0];
+    // ユーザー名の決定（渡された名前があれば使い、なければメールから取得）
+    var userName = record.userName || record.userEmail.split('@')[0];
     var fileName = '通勤費精算_' + record.targetMonth + '_' + userName;
 
     // 1. 保存先フォルダの取得・作成

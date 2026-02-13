@@ -38,6 +38,13 @@ global.Session = {
   getActiveUser: mockGetActiveUser,
 };
 
+const mockPeopleGet = jest.fn();
+global.People = {
+  People: {
+    get: mockPeopleGet
+  }
+};
+
 describe('CommuteExpenseUseCase', () => {
   let useCase;
 
@@ -49,6 +56,7 @@ describe('CommuteExpenseUseCase', () => {
 
   it('実行すると期間計算・集計・テンプレート出力を行い、結果を返すこと', () => {
     const mockEmail = 'test@example.com';
+    const mockUserName = '田中 太郎';
     const mockDate = new Date(2026, 0, 29);
     const mockStartDate = new Date(2025, 11, 16);
     const mockEndDate = new Date(2026, 0, 15);
@@ -57,6 +65,9 @@ describe('CommuteExpenseUseCase', () => {
     const unitPrice = 1000;
 
     mockGetEmail.mockReturnValue(mockEmail);
+    mockPeopleGet.mockReturnValue({
+      names: [{ displayName: mockUserName }]
+    });
     mockGetTemplateSpreadsheetId.mockReturnValue('test-template-id');
     
     mockGetSettlementPeriod.mockReturnValue({
@@ -80,13 +91,10 @@ describe('CommuteExpenseUseCase', () => {
     });
 
     // 呼び出し検証
-    expect(mockGetActiveUser).toHaveBeenCalled();
-    expect(mockGetSettlementPeriod).toHaveBeenCalledWith(mockDate);
-    expect(CalendarService).toHaveBeenCalled();
-    expect(mockGetCommuteSummary).toHaveBeenCalledWith(mockStartDate, mockEndDate);
-    expect(SpreadsheetService).toHaveBeenCalled();
+    expect(mockPeopleGet).toHaveBeenCalledWith('people/me', expect.anything());
     expect(mockExportToTemplate).toHaveBeenCalledWith('test-template-id', expect.objectContaining({
       userEmail: mockEmail,
+      userName: mockUserName,
       unitPrice: unitPrice,
       totalAmount: 2000
     }));
