@@ -2,7 +2,7 @@ if (typeof require !== 'undefined') {
   var { getSettlementPeriod } = require('./PeriodCalculator');
   var { CalendarService } = require('./CalendarService');
   var { SpreadsheetService } = require('./SpreadsheetService');
-  var { COMMUTE_UNIT_PRICE, SPREADSHEET_ID, SHEET_NAME } = require('./Constants');
+  var { COMMUTE_UNIT_PRICE, getTemplateSpreadsheetId } = require('./Constants');
 }
 
 /**
@@ -13,19 +13,21 @@ function CommuteExpenseUseCase() {}
 /**
  * 通勤費を計算して保存する
  * @param {Date} baseDate 基準日
- * @param {number} unitPrice 単価（往復分、省略時は定数を使用）
- * @returns {Object} 計算結果 { daysCount, totalAmount, dates }
+ * @param {number} unitPrice 単価（往復分）
+ * @param {string} userName ユーザー名
+ * @param {string} userEmail ユーザーのメールアドレス (必須)
+ * @returns {Object} 計算結果 { daysCount, totalAmount, dates, spreadsheetUrl }
  */
-CommuteExpenseUseCase.prototype.execute = function (baseDate, unitPrice) {
-  console.log('CommuteExpenseUseCase.execute started');
+CommuteExpenseUseCase.prototype.execute = function (baseDate, unitPrice, userName, userEmail) {
   if (!baseDate) baseDate = new Date();
+  if (!userEmail) throw new Error('User email is required for commute expense application.');
 
   // 単価の決定
-  // 定数が未定義の場合のフォールバックも考慮（テスト環境など）
   var defaultPrice = typeof COMMUTE_UNIT_PRICE !== 'undefined' ? COMMUTE_UNIT_PRICE : 1000;
   var currentUnitPrice = typeof unitPrice === 'number' ? unitPrice : defaultPrice;
 
-  var userEmail = Session.getActiveUser().getEmail();
+  // ユーザー名の決定（空の場合はメールアドレスのプレフィックスを使用）
+  var resolvedUserName = userName || userEmail.split('@')[0];
 
   // 1. 精算期間の計算
   var period = getSettlementPeriod(baseDate);
@@ -41,26 +43,31 @@ CommuteExpenseUseCase.prototype.execute = function (baseDate, unitPrice) {
   var targetMonth = period.endDate.getMonth() + 1;
   var targetMonthStr = targetYear + '-' + targetMonth.toString().padStart(2, '0');
 
-  // 4. 保存
-  // 定数が未定義の場合のフォールバック
-  var sheetId = typeof SPREADSHEET_ID !== 'undefined' ? SPREADSHEET_ID : '';
-  var sheetName = typeof SHEET_NAME !== 'undefined' ? SHEET_NAME : '';
+  // 4. 保存（テンプレートへの出力のみ）
+  var templateId = typeof getTemplateSpreadsheetId === 'function' ? getTemplateSpreadsheetId() : '';
+  var spreadsheetUrl = '';
 
-  var spreadsheetService = new SpreadsheetService(sheetId, sheetName);
-  spreadsheetService.saveRecord({
-    applicationDate: baseDate,
-    userEmail: userEmail,
-    targetMonth: targetMonthStr,
-    unitPrice: currentUnitPrice,
-    daysCount: summary.count,
-    totalAmount: totalAmount,
-    dateList: summary.dates.join(', '),
-  });
+  if (templateId) {
+    var spreadsheetService = new SpreadsheetService();
+    spreadsheetUrl = spreadsheetService.exportToTemplate(templateId, {
+      applicationDate: baseDate,
+      userEmail: userEmail,
+      userName: resolvedUserName,
+      targetMonth: targetMonthStr,
+      unitPrice: currentUnitPrice,
+      daysCount: summary.count,
+      totalAmount: totalAmount,
+      dateList: summary.dates.join(', '),
+    });
+  } else {
+    console.warn('Template spreadsheet ID is not defined. No template was created.');
+  }
 
   return {
     daysCount: summary.count,
     totalAmount: totalAmount,
     dates: summary.dates,
+    spreadsheetUrl: spreadsheetUrl,
   };
 };
 
