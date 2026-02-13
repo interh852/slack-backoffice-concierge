@@ -1,6 +1,6 @@
 if (typeof require !== 'undefined') {
   var main = require('./main');
-  var { CHAT_KEYWORD, STATE_KEY_PREFIX, STATE_WAITING_FOR_AMOUNT } = require('./Constants');
+  var { SPREADSHEET_ID, CONFIG_SHEET_NAME, STATE_KEY_PREFIX, STATE_WAITING_FOR_AMOUNT } = require('./Constants');
   var { GeminiService } = require('./GeminiService');
 }
 
@@ -8,60 +8,102 @@ if (typeof require !== 'undefined') {
  * Google Chatからのメッセージを受信した時のハンドラ
  */
 function onMessage(event) {
-  console.log('onMessage called with event:', JSON.stringify(event));
-
-  // イベントオブジェクトから必要な情報を抽出
-  var data = extractEventData(event);
-  var messageText = data.text;
-  var spaceName = data.spaceName;
-  var userEmail = data.userEmail;
-
-  if (!spaceName) return;
-
-  var cache = CacheService.getUserCache();
-  var stateKey = STATE_KEY_PREFIX + userEmail;
-  var currentState = cache.get(stateKey);
-
-  // 金額入力待ちの状態チェック（ここはGeminiを通さず高速に処理）
-  if (currentState === STATE_WAITING_FOR_AMOUNT) {
-    handleAmountInput(messageText, spaceName, stateKey, cache);
-    return;
-  }
-
-  // Geminiを使って意図解析
-  var gemini = new GeminiService();
-  
-  // スプレッドシートからプロンプトを取得
-  var sheetId = typeof SPREADSHEET_ID !== 'undefined' ? SPREADSHEET_ID : '';
-  var ss = SpreadsheetApp.openById(sheetId);
-  var promptSheet = ss.getSheetByName('通勤費');
-  var systemInstruction = promptSheet.getRange('B1').getValue();
-  
-  var responseText = gemini.generateContent(messageText, systemInstruction);
-  var result;
   try {
-    result = JSON.parse(responseText);
-  } catch (e) {
-    console.error('Gemini response parse error:', responseText);
-    result = { intent: 'other', message: '申し訳ありません、メッセージを正しく理解できませんでした。' };
-  }
+    console.log('onMessage called with event:', JSON.stringify(event));
 
-  // 意図に応じた処理
-  if (result.intent === 'commute') {
-    if (result.amount) {
-      // 金額が含まれている場合は即座に精算
-      Chat.Spaces.Messages.create({ text: result.message }, spaceName);
-      executeCommuteExpense(result.amount, spaceName, stateKey, cache);
+    var data = extractEventData(event);
+    var messageText = data.text;
+    var spaceName = data.spaceName;
+    var userEmail = data.userEmail;
+
+    if (!spaceName) return;
+
+    var cache = CacheService.getUserCache();
+    var stateKey = STATE_KEY_PREFIX + userEmail;
+    var currentState = cache.get(stateKey);
+
+    // 金額入力待ちの状態チェック
+    if (currentState === STATE_WAITING_FOR_AMOUNT) {
+      handleAmountInput(messageText, spaceName, stateKey, cache);
+      return;
+    }
+
+    // 設定値（モデル・プロンプト）を取得
+    var config = getBotConfig();
+    var apiKey = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
+    
+    // Geminiを使って意図解析
+    var gemini = new GeminiService(apiKey, config.model);
+    var responseText = gemini.generateContent(messageText, config.prompt);
+    
+    var result;
+    try {
+      result = parseGeminiResponse(responseText);
+    } catch (e) {
+      console.error('Gemini response parse error:', responseText, e);
+      result = { intent: 'other', message: '申し訳ありません、メッセージを正しく理解できませんでした。' };
+    }
+
+    // 意図に応じた処理
+    if (result.intent === 'commute') {
+      if (result.amount) {
+        Chat.Spaces.Messages.create({ text: result.message }, spaceName);
+        executeCommuteExpense(result.amount, spaceName, stateKey, cache);
+      } else {
+        var waitingState = typeof STATE_WAITING_FOR_AMOUNT !== 'undefined' ? STATE_WAITING_FOR_AMOUNT : 'WAITING_FOR_AMOUNT';
+        cache.put(stateKey, waitingState, 600);
+        Chat.Spaces.Messages.create({ text: result.message }, spaceName);
+      }
     } else {
-      // 金額がない場合は入力待ち状態にする
-      var waitingState = typeof STATE_WAITING_FOR_AMOUNT !== 'undefined' ? STATE_WAITING_FOR_AMOUNT : 'WAITING_FOR_AMOUNT';
-      cache.put(stateKey, waitingState, 600);
       Chat.Spaces.Messages.create({ text: result.message }, spaceName);
     }
-  } else {
-    // それ以外（雑談など）
-    Chat.Spaces.Messages.create({ text: result.message }, spaceName);
+  } catch (error) {
+    console.error('Critical error in onMessage:', error);
+    if (event && spaceName) {
+      Chat.Spaces.Messages.create({ text: '❌ 申し訳ありません、システムエラーが発生しました。' }, spaceName);
+    }
   }
+}
+
+/**
+ * ボットの設定（モデル・プロンプト）をキャッシュ経由で取得します
+ */
+function getBotConfig() {
+  var cache = CacheService.getScriptCache();
+  var model = cache.get('GEMINI_MODEL');
+  var prompt = cache.get('GEMINI_PROMPT');
+  
+  if (model && prompt) {
+    return { model: model, prompt: prompt };
+  }
+  
+  // キャッシュがなければスプレッドシートから取得
+  var sheetId = typeof SPREADSHEET_ID !== 'undefined' ? SPREADSHEET_ID : '';
+  if (!sheetId) sheetId = PropertiesService.getScriptProperties().getProperty('COMMUTE_EXPENSE_SPREDSHEET');
+  
+  var ss = SpreadsheetApp.openById(sheetId);
+  
+  if (!model) {
+    var configSheetName = typeof CONFIG_SHEET_NAME !== 'undefined' ? CONFIG_SHEET_NAME : '情報';
+    model = ss.getSheetByName(configSheetName).getRange('B1').getValue();
+    cache.put('GEMINI_MODEL', model, 21600); // 6時間キャッシュ
+  }
+  
+  if (!prompt) {
+    prompt = ss.getSheetByName('通勤費').getRange('B1').getValue();
+    cache.put('GEMINI_PROMPT', prompt, 21600);
+  }
+  
+  return { model: model, prompt: prompt };
+}
+
+/**
+ * Geminiのレスポンス（JSON）を安全にパースします
+ */
+function parseGeminiResponse(responseText) {
+  // マークダウン記法 (```json ... ```) を除去
+  var cleanText = responseText.replace(/```json\s*/g, '').replace(/```/g, '').trim();
+  return JSON.parse(cleanText);
 }
 
 /**
@@ -93,7 +135,7 @@ function executeCommuteExpense(amount, spaceName, stateKey, cache) {
   } catch (error) {
     console.error('Error in executeCommuteExpense:', error);
     Chat.Spaces.Messages.create(
-      { text: '❌ エラーが発生しました: ' + (error.message || String(error)) },
+      { text: '❌ 精算処理中にエラーが発生しました: ' + (error.message || String(error)) },
       spaceName
     );
   }
@@ -109,7 +151,6 @@ function handleAmountInput(messageText, spaceName, stateKey, cache) {
     return;
   }
 
-  // 文字列から数字部分だけを抽出
   var numericText = messageText.replace(/[^\d]/g, '');
   var amount = parseInt(numericText, 10);
 
