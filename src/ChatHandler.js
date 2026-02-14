@@ -95,7 +95,7 @@ function onMessage(event) {
  * カードクリックを処理します
  */
 function handleCardClick(event, spaceName, userName, userEmail, stateKey, cache) {
-  var actionId = event.common.actionMethodName;
+  var actionId = event.common.invokedFunction;
   var currentState = cache.get(stateKey);
 
   if (!currentState || currentState.indexOf(STATE_WAITING_FOR_FARE_CONFIRMATION) !== 0) {
@@ -132,11 +132,11 @@ function sendFareConfirmationCard(fare, spaceName) {
                     buttons: [
                       {
                         text: 'はい (使用する)',
-                        onClick: { action: { actionMethodName: ACTION_REUSE_FARE_YES } },
+                        onClick: { action: { functionName: ACTION_REUSE_FARE_YES } },
                       },
                       {
                         text: 'いいえ (入力する)',
-                        onClick: { action: { actionMethodName: ACTION_REUSE_FARE_NO } },
+                        onClick: { action: { functionName: ACTION_REUSE_FARE_NO } },
                       },
                     ],
                   },
