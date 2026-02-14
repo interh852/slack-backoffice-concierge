@@ -44,6 +44,6 @@ describe('CalendarService', () => {
     expect(mockGetDefaultCalendar).toHaveBeenCalled();
     expect(mockGetEvents).toHaveBeenCalledWith(startDate, endDate);
     expect(summary.count).toBe(2);
-    expect(summary.dates).toEqual(['2026-01-20', '2026-01-25']);
+    expect(summary.dates).toEqual(['1/20', '1/25']);
   });
 });

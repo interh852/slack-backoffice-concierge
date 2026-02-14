@@ -74,4 +74,66 @@ describe('SpreadsheetService', () => {
     expect(mockGetRange).toHaveBeenCalledWith('A2');
     expect(mockSetRangeValue).toHaveBeenCalledWith('田中 太郎');
   });
+
+  describe('getLastMonthFare', () => {
+    it('先月の精算書が存在する場合、片道運賃を取得できるべき', () => {
+      const userEmail = 'test@example.com';
+      const baseDate = new Date(2026, 1, 15); // 2月
+      // 先月は 2026-01
+
+      const mockFile = {
+        getId: () => 'last-month-file-id',
+      };
+      const mockFilesIterator = {
+        hasNext: jest.fn().mockReturnValueOnce(true).mockReturnValue(false),
+        next: jest.fn().mockReturnValue(mockFile),
+      };
+
+      const mockTargetFolder = {
+        getFilesByName: jest.fn().mockReturnValue(mockFilesIterator),
+        getFoldersByName: jest.fn().mockReturnValue({ hasNext: () => false }),
+      };
+
+      // getOrCreateFolder のロジックに合わせてモックをネストさせる
+      // backoffice-concierge/通勤費 の2階層分
+      const mockSubFolder = {
+        getFoldersByName: jest.fn().mockReturnValue({
+          hasNext: jest.fn().mockReturnValue(true),
+          next: jest.fn().mockReturnValue(mockTargetFolder),
+        }),
+      };
+
+      mockFolder.getFoldersByName.mockReturnValue({
+        hasNext: jest.fn().mockReturnValue(true),
+        next: jest.fn().mockReturnValue(mockSubFolder),
+      });
+
+      const mockLastMonthSheet = {
+        getRange: jest.fn().mockReturnValue({
+          getValue: () => 600, // 片道600円
+        }),
+      };
+      mockOpen.mockReturnValue({
+        getSheets: () => [mockLastMonthSheet],
+      });
+
+      const fare = service.getLastMonthFare(userEmail, baseDate);
+
+      expect(fare).toBe(600);
+      expect(mockTargetFolder.getFilesByName).toHaveBeenCalledWith('通勤費精算_2026-01_test');
+      expect(mockLastMonthSheet.getRange).toHaveBeenCalledWith('D2'); // ONE_WAY_COST のセル
+    });
+
+    it('先月の精算書が存在しない場合、nullを返すべき', () => {
+      const userEmail = 'test@example.com';
+      const baseDate = new Date(2026, 1, 15);
+
+      mockFolder.getFoldersByName.mockReturnValue({
+        hasNext: jest.fn().mockReturnValue(false),
+      });
+
+      const fare = service.getLastMonthFare(userEmail, baseDate);
+      expect(fare).toBeNull();
+    });
+  });
 });
