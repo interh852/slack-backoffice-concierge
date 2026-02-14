@@ -196,6 +196,7 @@ describe('ChatHandler', () => {
 
       onMessage(event);
 
+      expect(mockGetLastMonthFare).toHaveBeenCalledWith(userEmail, expect.any(Date), userName);
       expect(global.Chat.Spaces.Messages.create).toHaveBeenCalledWith(
         expect.objectContaining({ cardsV2: expect.any(Array) }),
         spaceName

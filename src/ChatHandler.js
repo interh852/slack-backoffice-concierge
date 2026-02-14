@@ -68,7 +68,7 @@ function onMessage(event) {
       } else {
         // 先月の運賃をチェック
         var ssService = new SpreadsheetService();
-        var lastMonthFare = ssService.getLastMonthFare(userEmail, new Date());
+        var lastMonthFare = ssService.getLastMonthFare(userEmail, new Date(), userName);
 
         if (lastMonthFare) {
           sendFareConfirmationCard(lastMonthFare, spaceName);
