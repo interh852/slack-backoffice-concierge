@@ -211,7 +211,7 @@ describe('ChatHandler', () => {
     it('カードで「はい」が押されたら精算を実行すべき', () => {
       const event = {
         type: 'CARD_CLICKED',
-        common: { actionMethodName: 'reuse_fare_yes' },
+        common: { invokedFunction: 'reuse_fare_yes' },
         user: { email: userEmail, displayName: userName },
         space: { name: spaceName }
       };
@@ -238,7 +238,7 @@ describe('ChatHandler', () => {
     it('カードで「いいえ」が押されたら金額入力を促すべき', () => {
       const event = {
         type: 'CARD_CLICKED',
-        common: { actionMethodName: 'reuse_fare_no' },
+        common: { invokedFunction: 'reuse_fare_no' },
         user: { email: userEmail, displayName: userName },
         space: { name: spaceName }
       };
