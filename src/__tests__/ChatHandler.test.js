@@ -10,6 +10,18 @@ jest.mock('../GeminiService', () => {
   };
 });
 
+// SpreadsheetService のモック
+const mockGetLastMonthFare = jest.fn();
+jest.mock('../SpreadsheetService', () => {
+  return {
+    SpreadsheetService: jest.fn().mockImplementation(() => {
+      return {
+        getLastMonthFare: mockGetLastMonthFare
+      };
+    })
+  };
+});
+
 // その後に読み込む
 if (typeof require !== 'undefined') {
   var { onMessage } = require('../ChatHandler');
@@ -60,6 +72,7 @@ describe('ChatHandler', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    global.CacheService.getUserCache().get.mockReturnValue(null);
   });
 
   describe('onMessage - Gemini 統合リファクタリング', () => {
@@ -132,6 +145,7 @@ describe('ChatHandler', () => {
         intent: 'commute',
         message: '片道の運賃を教えてください'
       }));
+      mockGetLastMonthFare.mockReturnValue(null);
 
       onMessage(event);
 
@@ -163,6 +177,84 @@ describe('ChatHandler', () => {
       expect(mockGenerateContent).not.toHaveBeenCalled();
       expect(spyApply).toHaveBeenCalledWith(expect.any(Date), 1000, userName, userEmail);
       spyApply.mockRestore();
+    });
+  });
+
+  describe('onMessage - 先月の運賃再利用', () => {
+    it('先月の運賃がある場合、確認カードを送信すべき', () => {
+      const event = {
+        message: { text: '交通費精算して' },
+        user: { email: userEmail, displayName: userName },
+        space: { name: spaceName }
+      };
+
+      mockGenerateContent.mockReturnValue(JSON.stringify({
+        intent: 'commute',
+        message: '片道の運賃を教えてください'
+      }));
+      mockGetLastMonthFare.mockReturnValue(600);
+
+      onMessage(event);
+
+      expect(global.Chat.Spaces.Messages.create).toHaveBeenCalledWith(
+        expect.objectContaining({ cardsV2: expect.any(Array) }),
+        spaceName
+      );
+      expect(global.CacheService.getUserCache().put).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.stringContaining('WAITING_FOR_FARE_CONFIRMATION|600'),
+        600
+      );
+    });
+
+    it('カードで「はい」が押されたら精算を実行すべき', () => {
+      const event = {
+        type: 'CARD_CLICKED',
+        common: { actionMethodName: 'reuse_fare_yes' },
+        user: { email: userEmail, displayName: userName },
+        space: { name: spaceName }
+      };
+
+      global.CacheService.getUserCache().get.mockReturnValue('WAITING_FOR_FARE_CONFIRMATION|600');
+      
+      const spyApply = jest.spyOn(main, 'applyCommuteExpenses').mockReturnValue({
+        daysCount: 2,
+        totalAmount: 2400,
+        dates: ['1/10', '1/12'],
+        spreadsheetUrl: 'https://example.com/spreadsheet'
+      });
+
+      onMessage(event);
+
+      expect(spyApply).toHaveBeenCalledWith(expect.any(Date), 1200, userName, userEmail);
+      expect(global.Chat.Spaces.Messages.create).toHaveBeenCalledWith(
+        expect.objectContaining({ text: expect.stringContaining('精算書を作成しました') }),
+        spaceName
+      );
+      spyApply.mockRestore();
+    });
+
+    it('カードで「いいえ」が押されたら金額入力を促すべき', () => {
+      const event = {
+        type: 'CARD_CLICKED',
+        common: { actionMethodName: 'reuse_fare_no' },
+        user: { email: userEmail, displayName: userName },
+        space: { name: spaceName }
+      };
+
+      global.CacheService.getUserCache().get.mockReturnValue('WAITING_FOR_FARE_CONFIRMATION|600');
+
+      onMessage(event);
+
+      expect(global.Chat.Spaces.Messages.create).toHaveBeenCalledWith(
+        { text: '了解しました。今回の片道運賃を教えてください。' },
+        spaceName
+      );
+      expect(global.CacheService.getUserCache().put).toHaveBeenCalledWith(
+        expect.any(String),
+        'WAITING_FOR_AMOUNT',
+        600
+      );
     });
   });
 });

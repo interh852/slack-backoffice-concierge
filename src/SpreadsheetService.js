@@ -77,6 +77,57 @@ SpreadsheetService.prototype.exportToTemplate = function (templateId, record) {
   }
 };
 
+/**
+ * 先月の精算書を探して片道運賃を取得します。
+ * @param {string} userEmail ユーザーのメールアドレス
+ * @param {Date} baseDate 基準日（通常は今日）
+ * @returns {number|null} 片道運賃、見つからない場合はnull
+ */
+SpreadsheetService.prototype.getLastMonthFare = function (userEmail, baseDate) {
+  try {
+    if (!baseDate) baseDate = new Date();
+    
+    // 1. 先月の targetMonth を計算 (YYYY-MM)
+    var lastMonthDate = new Date(baseDate.getFullYear(), baseDate.getMonth() - 1, 1);
+    var lastMonthStr = lastMonthDate.getFullYear() + '-' + (lastMonthDate.getMonth() + 1).toString().padStart(2, '0');
+    
+    var userName = userEmail.split('@')[0];
+    var fileName = '通勤費精算_' + lastMonthStr + '_' + userName;
+
+    // 2. 保存先フォルダの取得
+    var folderPath = typeof EXPORT_FOLDER_PATH !== 'undefined' ? EXPORT_FOLDER_PATH : 'backoffice-concierge/通勤費';
+    var names = folderPath.split('/');
+    var folder = DriveApp.getRootFolder();
+    for (var i = 0; i < names.length; i++) {
+      var name = names[i];
+      if (name === '') continue;
+      var folders = folder.getFoldersByName(name);
+      if (folders.hasNext()) {
+        folder = folders.next();
+      } else {
+        return null; // フォルダがなければデータもない
+      }
+    }
+
+    // 3. ファイルを検索
+    var files = folder.getFilesByName(fileName);
+    if (!files.hasNext()) return null;
+
+    var file = files.next();
+    var spreadsheet = SpreadsheetApp.open(file);
+    var sheet = spreadsheet.getSheets()[0];
+
+    // 4. 片道運賃を取得
+    var cells = typeof TEMPLATE_CELLS !== 'undefined' ? TEMPLATE_CELLS : { ONE_WAY_COST: 'D2' };
+    var fare = sheet.getRange(cells.ONE_WAY_COST).getValue();
+
+    return typeof fare === 'number' ? fare : null;
+  } catch (error) {
+    console.error('Failed to get last month fare:', error);
+    return null;
+  }
+};
+
 if (typeof module !== 'undefined') {
   module.exports = { SpreadsheetService };
 }
