@@ -117,10 +117,10 @@ describe('SpreadsheetService', () => {
         getSheets: () => [mockLastMonthSheet],
       });
 
-      const fare = service.getLastMonthFare(userEmail, baseDate);
+      const fare = service.getLastMonthFare(userEmail, baseDate, '伊東明則');
 
       expect(fare).toBe(600);
-      expect(mockTargetFolder.getFilesByName).toHaveBeenCalledWith('通勤費精算_2026-01_test');
+      expect(mockTargetFolder.getFilesByName).toHaveBeenCalledWith('通勤費精算_2026-01_伊東明則');
       expect(mockLastMonthSheet.getRange).toHaveBeenCalledWith('D2'); // ONE_WAY_COST のセル
     });
 

@@ -81,9 +81,10 @@ SpreadsheetService.prototype.exportToTemplate = function (templateId, record) {
  * 先月の精算書を探して片道運賃を取得します。
  * @param {string} userEmail ユーザーのメールアドレス
  * @param {Date} baseDate 基準日（通常は今日）
+ * @param {string} [userName] ユーザー名（表示名）
  * @returns {number|null} 片道運賃、見つからない場合はnull
  */
-SpreadsheetService.prototype.getLastMonthFare = function (userEmail, baseDate) {
+SpreadsheetService.prototype.getLastMonthFare = function (userEmail, baseDate, userName) {
   try {
     if (!baseDate) baseDate = new Date();
     
@@ -91,8 +92,8 @@ SpreadsheetService.prototype.getLastMonthFare = function (userEmail, baseDate) {
     var lastMonthDate = new Date(baseDate.getFullYear(), baseDate.getMonth() - 1, 1);
     var lastMonthStr = lastMonthDate.getFullYear() + '-' + (lastMonthDate.getMonth() + 1).toString().padStart(2, '0');
     
-    var userName = userEmail.split('@')[0];
-    var fileName = '通勤費精算_' + lastMonthStr + '_' + userName;
+    var resolvedUserName = userName || userEmail.split('@')[0];
+    var fileName = '通勤費精算_' + lastMonthStr + '_' + resolvedUserName;
 
     // 2. 保存先フォルダの取得
     var folderPath = typeof EXPORT_FOLDER_PATH !== 'undefined' ? EXPORT_FOLDER_PATH : 'backoffice-concierge/通勤費';
