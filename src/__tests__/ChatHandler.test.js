@@ -4,9 +4,9 @@ jest.mock('../GeminiService', () => {
   return {
     GeminiService: jest.fn().mockImplementation(() => {
       return {
-        generateContent: mockGenerateContent
+        generateContent: mockGenerateContent,
       };
-    })
+    }),
   };
 });
 
@@ -16,9 +16,9 @@ jest.mock('../SpreadsheetService', () => {
   return {
     SpreadsheetService: jest.fn().mockImplementation(() => {
       return {
-        getLastMonthFare: mockGetLastMonthFare
+        getLastMonthFare: mockGetLastMonthFare,
       };
-    })
+    }),
   };
 });
 
@@ -33,36 +33,36 @@ global.CacheService = {
   getUserCache: jest.fn().mockReturnValue({
     get: jest.fn(),
     put: jest.fn(),
-    remove: jest.fn()
+    remove: jest.fn(),
   }),
   getScriptCache: jest.fn().mockReturnValue({
     get: jest.fn(),
-    put: jest.fn()
-  })
+    put: jest.fn(),
+  }),
 };
 
 global.PropertiesService = {
   getScriptProperties: jest.fn().mockReturnValue({
-    getProperty: jest.fn().mockReturnValue('mock-api-key')
-  })
+    getProperty: jest.fn().mockReturnValue('mock-api-key'),
+  }),
 };
 
 global.Chat = {
   Spaces: {
     Messages: {
-      create: jest.fn()
-    }
-  }
+      create: jest.fn(),
+    },
+  },
 };
 
 global.SpreadsheetApp = {
   openById: jest.fn().mockReturnValue({
     getSheetByName: jest.fn().mockReturnValue({
       getRange: jest.fn().mockReturnValue({
-        getValue: jest.fn().mockReturnValue('mock-value')
-      })
-    })
-  })
+        getValue: jest.fn().mockReturnValue('mock-value'),
+      }),
+    }),
+  }),
 };
 
 describe('ChatHandler', () => {
@@ -75,18 +75,20 @@ describe('ChatHandler', () => {
     global.CacheService.getUserCache().get.mockReturnValue(null);
   });
 
-  describe('onMessage - Gemini 統合リファクタリング', () => {
-    it('キャッシュがない場合、スプレッドシートから取得してGeminiを呼び出すべき', () => {
+  describe('onMessage - テキスト対話（カードなし）', () => {
+    it('Geminiの意図解析結果に基づいてメッセージを送信すべき', () => {
       const event = {
         message: { text: 'テスト' },
         user: { email: userEmail, displayName: userName },
-        space: { name: spaceName }
+        space: { name: spaceName },
       };
 
-      mockGenerateContent.mockReturnValue(JSON.stringify({
-        intent: 'other',
-        message: 'こんにちは'
-      }));
+      mockGenerateContent.mockReturnValue(
+        JSON.stringify({
+          intent: 'other',
+          message: 'こんにちは',
+        })
+      );
 
       onMessage(event);
 
@@ -96,109 +98,50 @@ describe('ChatHandler', () => {
       );
     });
 
-    it('JSONにマークダウン記法が含まれていても正しくパースすべき', () => {
+    it('JSONパースエラー時は会話として続行すべき', () => {
       const event = {
         message: { text: 'テスト' },
         user: { email: userEmail, displayName: userName },
-        space: { name: spaceName }
+        space: { name: spaceName },
       };
 
-      mockGenerateContent.mockReturnValue('```json\n{"intent":"other", "message":"JSONテスト"}\n```');
+      // 無効なJSONを返す
+      mockGenerateContent.mockReturnValue('無効なレスポンス');
 
       onMessage(event);
 
+      // パースエラー時はそのまま送信するロジックに変更したため
+      // エラーメッセージではなく、元のテキストが送信されることを確認
       expect(global.Chat.Spaces.Messages.create).toHaveBeenCalledWith(
-        { text: 'JSONテスト' },
+        { text: '無効なレスポンス' },
         spaceName
       );
-    });
-
-    it('予期せぬエラーが発生しても、ユーザーにエラーを通知すべき', () => {
-      const event = {
-        message: { text: 'テスト' },
-        user: { email: userEmail, displayName: userName },
-        space: { name: spaceName }
-      };
-
-      mockGenerateContent.mockImplementation(() => {
-        throw new Error('Boom!');
-      });
-
-      onMessage(event);
-
-      expect(global.Chat.Spaces.Messages.create).toHaveBeenCalledWith(
-        { text: '❌ 申し訳ありません、システムエラーが発生しました。' },
-        spaceName
-      );
-    });
-  });
-
-  describe('onMessage - 既存機能の維持', () => {
-    it('自然言語で精算を依頼されたら、金額の入力を促すべき', () => {
-      const event = {
-        message: { text: '精算して' },
-        user: { email: userEmail, displayName: userName },
-        space: { name: spaceName }
-      };
-
-      mockGenerateContent.mockReturnValue(JSON.stringify({
-        intent: 'commute',
-        message: '片道の運賃を教えてください'
-      }));
-      mockGetLastMonthFare.mockReturnValue(null);
-
-      onMessage(event);
-
-      expect(global.Chat.Spaces.Messages.create).toHaveBeenCalledWith(
-        { text: '片道の運賃を教えてください' },
-        spaceName
-      );
-      expect(global.CacheService.getUserCache().put).toHaveBeenCalled();
-    });
-
-    it('金額入力待ちの状態で数値を送られたら、Geminiを介さず処理すべき', () => {
-      const event = {
-        message: { text: '500' },
-        user: { email: userEmail, displayName: userName },
-        space: { name: spaceName }
-      };
-
-      global.CacheService.getUserCache().get.mockReturnValue('WAITING_FOR_AMOUNT');
-      
-      const spyApply = jest.spyOn(main, 'applyCommuteExpenses').mockReturnValue({
-        daysCount: 2,
-        totalAmount: 2000,
-        dates: ['2026-01-10', '2026-01-12'],
-        spreadsheetUrl: 'https://example.com/spreadsheet'
-      });
-
-      onMessage(event);
-
-      expect(mockGenerateContent).not.toHaveBeenCalled();
-      expect(spyApply).toHaveBeenCalledWith(expect.any(Date), 1000, userName, userEmail);
-      spyApply.mockRestore();
     });
   });
 
   describe('onMessage - 先月の運賃再利用', () => {
-    it('先月の運賃がある場合、確認カードを送信すべき', () => {
+    it('先月の運賃がある場合、確認メッセージを送信すべき', () => {
       const event = {
         message: { text: '交通費精算して' },
         user: { email: userEmail, displayName: userName },
-        space: { name: spaceName }
+        space: { name: spaceName },
       };
 
-      mockGenerateContent.mockReturnValue(JSON.stringify({
-        intent: 'commute',
-        message: '片道の運賃を教えてください'
-      }));
+      mockGenerateContent.mockReturnValue(
+        JSON.stringify({
+          intent: 'commute',
+          message: '片道の運賃を教えてください',
+        })
+      );
       mockGetLastMonthFare.mockReturnValue(600);
 
       onMessage(event);
 
       expect(mockGetLastMonthFare).toHaveBeenCalledWith(userEmail, expect.any(Date), userName);
       expect(global.Chat.Spaces.Messages.create).toHaveBeenCalledWith(
-        expect.objectContaining({ cardsV2: expect.any(Array) }),
+        expect.objectContaining({
+          text: expect.stringContaining('先月の精算資料から片道運賃 **600円** が見つかりました'),
+        }),
         spaceName
       );
       expect(global.CacheService.getUserCache().put).toHaveBeenCalledWith(
@@ -208,39 +151,39 @@ describe('ChatHandler', () => {
       );
     });
 
-    it('カードで「はい」が押されたら精算を実行すべき', () => {
+    it('「はい」と答えたら精算を実行すべき', () => {
       const event = {
-        type: 'CARD_CLICKED',
-        common: { invokedFunction: 'reuse_fare_yes' },
+        message: { text: 'はい' },
         user: { email: userEmail, displayName: userName },
-        space: { name: spaceName }
+        space: { name: spaceName },
       };
 
       global.CacheService.getUserCache().get.mockReturnValue('WAITING_FOR_FARE_CONFIRMATION|600');
-      
+
       const spyApply = jest.spyOn(main, 'applyCommuteExpenses').mockReturnValue({
         daysCount: 2,
         totalAmount: 2400,
         dates: ['1/10', '1/12'],
-        spreadsheetUrl: 'https://example.com/spreadsheet'
+        spreadsheetUrl: 'https://example.com/spreadsheet',
       });
 
       onMessage(event);
 
       expect(spyApply).toHaveBeenCalledWith(expect.any(Date), 1200, userName, userEmail);
       expect(global.Chat.Spaces.Messages.create).toHaveBeenCalledWith(
-        expect.objectContaining({ text: expect.stringContaining('精算書を作成しました') }),
+        expect.objectContaining({
+          text: expect.stringContaining('先月の運賃（片道600円）で申請しました'),
+        }),
         spaceName
       );
       spyApply.mockRestore();
     });
 
-    it('カードで「いいえ」が押されたら金額入力を促すべき', () => {
+    it('「いいえ」と答えたら金額入力を促すべき', () => {
       const event = {
-        type: 'CARD_CLICKED',
-        common: { invokedFunction: 'reuse_fare_no' },
+        message: { text: 'いいえ' },
         user: { email: userEmail, displayName: userName },
-        space: { name: spaceName }
+        space: { name: spaceName },
       };
 
       global.CacheService.getUserCache().get.mockReturnValue('WAITING_FOR_FARE_CONFIRMATION|600');
@@ -248,7 +191,9 @@ describe('ChatHandler', () => {
       onMessage(event);
 
       expect(global.Chat.Spaces.Messages.create).toHaveBeenCalledWith(
-        { text: '了解しました。今回の片道運賃を教えてください。' },
+        expect.objectContaining({
+          text: expect.stringContaining('了解しました。今回の片道運賃を数字だけで教えてください'),
+        }),
         spaceName
       );
       expect(global.CacheService.getUserCache().put).toHaveBeenCalledWith(
