@@ -5,36 +5,43 @@ class DriveService {
   /**
    * パス（スラッシュ区切り）からフォルダを取得する
    * @param {string} path フォルダパス (例: "Folder/SubFolder")
-   * @param {GoogleAppsScript.Drive.Folder} [startFolder] 開始フォルダ（省略時はルートから検索）
+   * @param {GoogleAppsScript.Drive.Folder} [startFolder] 開始フォルダ（省略時はマイドライブルート）
+   * @param {boolean} [createIfMissing=false] フォルダが存在しない場合に作成するかどうか
    * @returns {GoogleAppsScript.Drive.Folder} フォルダオブジェクト
-   * @throws {Error} フォルダが見つからない場合
+   * @throws {Error} フォルダが見つからない場合 (createIfMissing=false時)
    */
-  getFolderFromPath(path, startFolder) {
+  getFolderFromPath(path, startFolder, createIfMissing = false) {
     const parts = path.split('/');
-    let currentFolder = startFolder || null;
+    // startFolderがなければルートフォルダを明示的に取得し、グローバル検索を回避する
+    let currentFolder = startFolder || DriveApp.getRootFolder();
 
     for (const part of parts) {
       if (!part) continue;
 
-      let folderIterator;
-      if (!currentFolder) {
-        // ルート（共有ドライブやマイドライブ直下）から検索
-        folderIterator = DriveApp.getFoldersByName(part);
-      } else {
-        // 現在のフォルダ内から検索
-        folderIterator = currentFolder.getFoldersByName(part);
-      }
+      const folderIterator = currentFolder.getFoldersByName(part);
 
       if (folderIterator.hasNext()) {
         currentFolder = folderIterator.next();
       } else {
-        // 存在しない場合はエラー
-        const currentPath = currentFolder ? currentFolder.getName() : 'Root';
-        throw new Error(`Folder "${part}" not found in "${currentPath}"`);
+        if (createIfMissing) {
+          // 存在しない場合は作成
+          currentFolder = currentFolder.createFolder(part);
+        } else {
+          const currentPath = currentFolder.getName ? currentFolder.getName() : 'Root';
+          throw new Error(`Folder "${part}" not found in "${currentPath}"`);
+        }
       }
     }
 
     return currentFolder;
+  }
+
+  /**
+   * getFolderFromPath のエイリアス（後方互換性のため）
+   * @deprecated getFolderFromPath を使用してください
+   */
+  getOrCreateFolderFromPath(path, startFolder) {
+    return this.getFolderFromPath(path, startFolder, true);
   }
 }
 

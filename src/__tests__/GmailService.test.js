@@ -13,14 +13,22 @@ describe('GmailService', () => {
     service = new GmailService();
   });
 
-  it('過去24時間以内の月次日報レポートメールを検索する', () => {
+  it('条件に一致する過去24時間以内のメールを検索する', () => {
     const mockThreads = [];
     GmailApp.search.mockReturnValue(mockThreads);
 
-    service.getRecentMonthlyReports();
+    service.getRecentThreads('月次日報レポート');
 
     expect(GmailApp.search).toHaveBeenCalledWith(
       expect.stringContaining('subject:("月次日報レポート") after:'),
+    );
+  });
+
+  it('除外ラベルが指定された場合にクエリに追加される', () => {
+    service.getRecentThreads('月次日報レポート', 'Processed');
+
+    expect(GmailApp.search).toHaveBeenCalledWith(
+      expect.stringContaining('-label:Processed'),
     );
   });
 });
