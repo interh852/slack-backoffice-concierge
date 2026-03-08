@@ -1,7 +1,7 @@
 // 依存関係（Constants）はグローバル変数として期待するが、
 // Node環境では require で取得する必要がある
-if (typeof require !== 'undefined') {
-  var { CLOSING_DAY, START_DAY } = require('./Constants');
+if (typeof module !== 'undefined') {
+  const { CLOSING_DAY, START_DAY } = require('./Constants');
 }
 
 /**

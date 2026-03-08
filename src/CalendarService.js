@@ -1,6 +1,7 @@
-if (typeof require !== 'undefined') {
-  var { COMMUTE_KEYWORD } = require('./Constants');
+if (typeof module !== 'undefined') {
+  const { COMMUTE_KEYWORD } = require('./Constants');
 }
+
 
 /**
  * Googleカレンダーから「出社」イベントを集計するクラス

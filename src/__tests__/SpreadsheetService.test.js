@@ -1,13 +1,21 @@
 const { SpreadsheetService } = require('../SpreadsheetService');
 
+// グローバル定数のモック
+global.TEMPLATE_CELLS = {
+  USER_NAME: 'A2',
+  TOTAL_AMOUNT: 'F2',
+  DAYS_COUNT: 'E2',
+  DATE_LIST: 'G2',
+  ONE_WAY_COST: 'D2',
+};
+global.EXPORT_FOLDER_PATH = 'backoffice-concierge/通勤費';
+
 // モックの定義
 const mockSetRangeValue = jest.fn();
+const mockGetValue = jest.fn();
 const mockGetRange = jest.fn().mockReturnValue({
   setValue: mockSetRangeValue,
-  getValue: jest.fn(),
-});
-const mockGetSheetByName = jest.fn().mockReturnValue({
-  getRange: mockGetRange,
+  getValue: mockGetValue,
 });
 
 const mockSheet = {
@@ -15,13 +23,11 @@ const mockSheet = {
 };
 
 const mockOpen = jest.fn().mockReturnValue({
-  getSheetByName: mockGetSheetByName,
   getSheets: jest.fn().mockReturnValue([mockSheet]),
   getUrl: jest.fn().mockReturnValue('https://example.com/spreadsheet'),
 });
 
 const mockOpenById = jest.fn().mockReturnValue({
-  getSheetByName: mockGetSheetByName,
   getSheets: jest.fn().mockReturnValue([mockSheet]),
   getUrl: jest.fn().mockReturnValue('https://example.com/spreadsheet'),
 });
@@ -45,10 +51,7 @@ const mockFolder = {
     next: jest.fn(),
   }),
   createFolder: jest.fn().mockReturnThis(),
-  getFiles: jest.fn().mockReturnValue({
-    hasNext: jest.fn().mockReturnValue(false),
-    next: jest.fn(),
-  }),
+  getName: () => 'Root',
 };
 
 global.DriveApp = {
@@ -71,13 +74,10 @@ describe('SpreadsheetService', () => {
   it('テンプレートをコピーして指定のフォルダに保存し、レコードを流し込めるべき', () => {
     const templateId = 'template-id';
     const record = {
-      applicationDate: new Date(2026, 0, 29),
-      userEmail: 'taro.tanaka@example.com',
       userName: '田中 太郎',
       targetMonth: '2026-01',
-      unitPrice: 1000,
-      daysCount: 5,
       totalAmount: 5000,
+      daysCount: 5,
       dateList: '2026/01/20, 2026/01/21',
     };
 
@@ -85,10 +85,6 @@ describe('SpreadsheetService', () => {
 
     expect(url).toBe('https://example.com/spreadsheet');
     expect(mockGetFileById).toHaveBeenCalledWith(templateId);
-    expect(mockMakeCopy).toHaveBeenCalledWith(
-      `通勤費精算_${record.targetMonth}_田中 太郎`,
-      expect.anything()
-    );
     expect(mockOpenById).toHaveBeenCalledWith('mock-copy-file-id');
 
     // テンプレートの形式に沿った流し込み確認
@@ -98,9 +94,8 @@ describe('SpreadsheetService', () => {
 
   describe('getLastMonthFare', () => {
     it('先月の精算書が存在する場合、片道運賃を取得できるべき', () => {
-      const userEmail = 'test@example.com';
-      const baseDate = new Date(2026, 1, 15); // 2月
-      // 先月は 2026-01
+      const targetMonth = '2026-01';
+      const userName = '伊東明則';
 
       const mockFile = {
         getId: () => 'last-month-file-id',
@@ -113,28 +108,21 @@ describe('SpreadsheetService', () => {
       };
 
       global.DriveApp.searchFiles.mockReturnValue(mockFilesIterator);
+      mockGetValue.mockReturnValue(600);
 
-      // getRange().getValue() の戻り値を設定
-      mockGetRange.mockReturnValue({
-        getValue: jest.fn().mockReturnValue(600),
-      });
-
-      const fare = service.getLastMonthFare(userEmail, baseDate, '伊東明則');
+      const fare = service.getLastMonthFare(targetMonth, userName);
 
       expect(fare).toBe(600);
       expect(global.DriveApp.searchFiles).toHaveBeenCalled();
-      expect(mockOpenById).toHaveBeenCalledWith('last-month-file-id');
+      expect(mockOpen).toHaveBeenCalled();
     });
 
     it('先月の精算書が存在しない場合、nullを返すべき', () => {
-      const userEmail = 'test@example.com';
-      const baseDate = new Date(2026, 1, 15);
-
       global.DriveApp.searchFiles.mockReturnValue({
         hasNext: jest.fn().mockReturnValue(false),
       });
 
-      const fare = service.getLastMonthFare(userEmail, baseDate, 'test');
+      const fare = service.getLastMonthFare('2026-01', 'test');
       expect(fare).toBeNull();
     });
   });

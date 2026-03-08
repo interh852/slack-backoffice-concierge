@@ -6,9 +6,19 @@ jest.mock('../CommuteExpenseUseCase', () => ({
   }))
 }));
 
+const mockArchive = jest.fn();
+jest.mock('../MonthlyReportArchiverUseCase', () => ({
+  MonthlyReportArchiverUseCase: jest.fn(() => ({
+    archive: mockArchive
+  }))
+}));
+
+// GASのグローバル環境を模倣
+global.CommuteExpenseUseCase = jest.requireMock('../CommuteExpenseUseCase').CommuteExpenseUseCase;
+global.MonthlyReportArchiverUseCase = jest.requireMock('../MonthlyReportArchiverUseCase').MonthlyReportArchiverUseCase;
+
 // その後に require
-const { applyCommuteExpenses } = require('../main');
-const { CommuteExpenseUseCase } = require('../CommuteExpenseUseCase');
+const { applyCommuteExpenses, archiveMonthlyReports } = require('../main');
 
 describe('Main Entry Point', () => {
   beforeEach(() => {
@@ -31,11 +41,14 @@ describe('Main Entry Point', () => {
 
     const result = applyCommuteExpenses(mockDate, mockUnitPrice, mockUserName, mockUserEmail);
 
-    // UseCase が正しく呼ばれたか検証
-    expect(CommuteExpenseUseCase).toHaveBeenCalled();
+    expect(global.CommuteExpenseUseCase).toHaveBeenCalled();
     expect(mockExecute).toHaveBeenCalledWith(mockDate, mockUnitPrice, mockUserName, mockUserEmail);
-
-    // 戻り値の検証
     expect(result).toEqual(mockResult);
+  });
+
+  it('archiveMonthlyReports は MonthlyReportArchiverUseCase を通じて処理を完遂すべき', () => {
+    archiveMonthlyReports();
+    expect(global.MonthlyReportArchiverUseCase).toHaveBeenCalled();
+    expect(mockArchive).toHaveBeenCalled();
   });
 });

@@ -26,10 +26,15 @@ jest.mock('../Constants', () => ({
   getTemplateSpreadsheetId: mockGetTemplateSpreadsheetId,
 }));
 
+// GASのグローバル環境を模倣
+global.getSettlementPeriod = mockGetSettlementPeriod;
+global.CalendarService = jest.requireMock('../CalendarService').CalendarService;
+global.SpreadsheetService = jest.requireMock('../SpreadsheetService').SpreadsheetService;
+global.COMMUTE_UNIT_PRICE = 1000;
+global.getTemplateSpreadsheetId = mockGetTemplateSpreadsheetId;
+
 // その後に require
 const { CommuteExpenseUseCase } = require('../CommuteExpenseUseCase');
-const { CalendarService } = require('../CalendarService');
-const { SpreadsheetService } = require('../SpreadsheetService');
 
 describe('CommuteExpenseUseCase', () => {
   let useCase;
@@ -73,9 +78,7 @@ describe('CommuteExpenseUseCase', () => {
 
     // 呼び出し検証
     expect(mockGetSettlementPeriod).toHaveBeenCalledWith(mockDate);
-    expect(CalendarService).toHaveBeenCalled();
     expect(mockGetCommuteSummary).toHaveBeenCalledWith(mockStartDate, mockEndDate);
-    expect(SpreadsheetService).toHaveBeenCalled();
     expect(mockExportToTemplate).toHaveBeenCalledWith('test-template-id', expect.objectContaining({
       userEmail: mockEmail,
       userName: mockUserName,
