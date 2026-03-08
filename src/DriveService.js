@@ -4,12 +4,13 @@
 class DriveService {
   /**
    * パス（スラッシュ区切り）からフォルダを取得または作成する
-   * @param {string} path フォルダパス (例: "Root/Folder/SubFolder")
+   * @param {string} path フォルダパス (例: "Folder/SubFolder")
+   * @param {GoogleAppsScript.Drive.Folder} [startFolder] 開始フォルダ（省略時はルートから検索）
    * @returns {GoogleAppsScript.Drive.Folder} 最終的なフォルダオブジェクト
    */
-  getOrCreateFolderFromPath(path) {
+  getOrCreateFolderFromPath(path, startFolder) {
     const parts = path.split('/');
-    let currentFolder = null;
+    let currentFolder = startFolder || null;
 
     for (const part of parts) {
       if (!part) continue;
@@ -28,7 +29,6 @@ class DriveService {
       } else {
         // 存在しない場合は作成
         if (!currentFolder) {
-          // ルートに作成（通常はDriveApp.createFolder(part)だが、共有ドライブの場合は権限に注意）
           currentFolder = DriveApp.createFolder(part);
         } else {
           currentFolder = currentFolder.createFolder(part);
