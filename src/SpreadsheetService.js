@@ -9,9 +9,6 @@ function SpreadsheetService() {}
 
 /**
  * テンプレートをコピーしてデータを流し込む
- * @param {string} templateId テンプレートスプレッドシートID
- * @param {Object} data 流し込むデータ
- * @returns {string} 作成されたスプレッドシートのURL
  */
 SpreadsheetService.prototype.exportToTemplate = function (templateId, data) {
   var templateFile = DriveApp.getFileById(templateId);
@@ -40,14 +37,10 @@ SpreadsheetService.prototype.exportToTemplate = function (templateId, data) {
 
 /**
  * 先月の片道運賃を取得する
- * @param {string} targetMonth 対象月 (YYYY-MM)
- * @param {string} userName ユーザー名
- * @returns {number|null} 片道運賃
  */
 SpreadsheetService.prototype.getLastMonthFare = function (targetMonth, userName) {
   console.log('Searching for last month fare. Month: ' + targetMonth + ' User: ' + userName);
 
-  // ファイル名で検索
   var query = "title contains '通勤費精算_" + targetMonth + "' and title contains '" + userName + "' and trashed = false";
   var files = DriveApp.searchFiles(query);
 
@@ -68,6 +61,38 @@ SpreadsheetService.prototype.getLastMonthFare = function (targetMonth, userName)
 
   console.log('Last month file not found with query: ' + query);
   return null;
+};
+
+/**
+ * サイト名のマッピング情報を取得する
+ * @param {string} spreadsheetId 設定用スプレッドシートID
+ * @returns {Object} { id: displayName } のマッピングオブジェクト
+ */
+SpreadsheetService.prototype.getSiteNameMap = function (spreadsheetId) {
+  if (!spreadsheetId) return {};
+
+  try {
+    var spreadsheet = SpreadsheetApp.openById(spreadsheetId);
+    var sheet = spreadsheet.getSheetByName('monthly_daily');
+    if (!sheet) return {};
+
+    var values = sheet.getDataRange().getValues();
+    var map = {};
+
+    // 1行目はヘッダーと想定し、2行目から読み込む
+    for (var i = 1; i < values.length; i++) {
+      var id = values[i][0]; // A列: nikaho1
+      var displayName = values[i][1]; // B列: にかほ1
+      if (id && displayName) {
+        map[id.toString().trim()] = displayName.toString().trim();
+      }
+    }
+
+    return map;
+  } catch (e) {
+    console.error('Failed to get site name map: ' + e.message);
+    return {};
+  }
 };
 
 /**
