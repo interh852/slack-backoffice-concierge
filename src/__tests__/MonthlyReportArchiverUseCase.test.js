@@ -1,14 +1,24 @@
 const { MonthlyReportArchiverUseCase } = require('../MonthlyReportArchiverUseCase');
 
-// GmailとDriveのモック
+// GmailとDrive、PropertiesServiceのモック
 global.GmailApp = { search: jest.fn() };
-global.DriveApp = { getFoldersByName: jest.fn() };
+global.DriveApp = {
+  getFoldersByName: jest.fn(),
+  getFolderById: jest.fn(),
+};
+global.PropertiesService = {
+  getScriptProperties: jest.fn().mockReturnValue({
+    getProperty: jest.fn(),
+  }),
+};
 
 describe('MonthlyReportArchiverUseCase', () => {
   let useCase;
+  const mockFolderId = 'test-folder-id';
 
   beforeEach(() => {
     jest.clearAllMocks();
+    PropertiesService.getScriptProperties().getProperty.mockReturnValue(mockFolderId);
     useCase = new MonthlyReportArchiverUseCase();
   });
 
@@ -38,9 +48,13 @@ describe('MonthlyReportArchiverUseCase', () => {
       const mockThread = {
         getMessages: () => [mockMessage],
       };
+      const mockBaseFolder = { id: mockFolderId };
       const mockFolder = {
         createFile: jest.fn(),
       };
+
+      // モックの設定
+      DriveApp.getFolderById.mockReturnValue(mockBaseFolder);
 
       // 依存サービスのメソッドをスパイ
       const getRecentMonthlyReportsSpy = jest.spyOn(useCase.gmailService, 'getRecentMonthlyReports')
@@ -50,11 +64,21 @@ describe('MonthlyReportArchiverUseCase', () => {
 
       useCase.archive();
 
+      expect(PropertiesService.getScriptProperties().getProperty).toHaveBeenCalledWith('WF_BANK_REPORT_DRIVE');
       expect(getRecentMonthlyReportsSpy).toHaveBeenCalled();
+      expect(DriveApp.getFolderById).toHaveBeenCalledWith(mockFolderId);
       expect(getOrCreateFolderSpy).toHaveBeenCalledWith(
-        expect.stringContaining('nikaho1/Daily Summary')
+        'nikaho1/Daily Summary',
+        mockBaseFolder
       );
       expect(mockFolder.createFile).toHaveBeenCalledWith(mockAttachment);
+    });
+
+    it('フォルダIDが設定されていない場合にエラーを投げる', () => {
+      PropertiesService.getScriptProperties().getProperty.mockReturnValue(null);
+      useCase = new MonthlyReportArchiverUseCase();
+
+      expect(() => useCase.archive()).toThrow('Script property WF_BANK_REPORT_DRIVE is not defined');
     });
   });
 });
