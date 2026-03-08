@@ -55,9 +55,26 @@ describe('DriveService', () => {
     });
 
     const path = '50_風車管理/金融機関報告/アーカイブ（日報・日次レポート・月次レポート）/site_A/Daily Summary';
-    const folder = service.getOrCreateFolderFromPath(path);
+    const folder = service.getFolderFromPath(path);
 
     expect(DriveApp.getFoldersByName).toHaveBeenCalledWith('50_風車管理');
     expect(folder.getName()).toBe('Daily Summary');
+  });
+
+  it('フォルダが存在しない場合にエラーを投げる', () => {
+    const mockFolderRoot = {
+      getFoldersByName: jest.fn().mockReturnValue({
+        hasNext: () => false,
+      }),
+      getName: () => 'Root',
+    };
+
+    DriveApp.getFoldersByName.mockReturnValue({
+      hasNext: () => true,
+      next: () => mockFolderRoot,
+    });
+
+    const path = 'Root/NotFound';
+    expect(() => service.getFolderFromPath(path)).toThrow('Folder "NotFound" not found in "Root"');
   });
 });

@@ -3,12 +3,13 @@
  */
 class DriveService {
   /**
-   * パス（スラッシュ区切り）からフォルダを取得または作成する
+   * パス（スラッシュ区切り）からフォルダを取得する
    * @param {string} path フォルダパス (例: "Folder/SubFolder")
    * @param {GoogleAppsScript.Drive.Folder} [startFolder] 開始フォルダ（省略時はルートから検索）
-   * @returns {GoogleAppsScript.Drive.Folder} 最終的なフォルダオブジェクト
+   * @returns {GoogleAppsScript.Drive.Folder} フォルダオブジェクト
+   * @throws {Error} フォルダが見つからない場合
    */
-  getOrCreateFolderFromPath(path, startFolder) {
+  getFolderFromPath(path, startFolder) {
     const parts = path.split('/');
     let currentFolder = startFolder || null;
 
@@ -27,12 +28,9 @@ class DriveService {
       if (folderIterator.hasNext()) {
         currentFolder = folderIterator.next();
       } else {
-        // 存在しない場合は作成
-        if (!currentFolder) {
-          currentFolder = DriveApp.createFolder(part);
-        } else {
-          currentFolder = currentFolder.createFolder(part);
-        }
+        // 存在しない場合はエラー
+        const currentPath = currentFolder ? currentFolder.getName() : 'Root';
+        throw new Error(`Folder "${part}" not found in "${currentPath}"`);
       }
     }
 

@@ -59,7 +59,7 @@ describe('MonthlyReportArchiverUseCase', () => {
       // 依存サービスのメソッドをスパイ
       const getRecentMonthlyReportsSpy = jest.spyOn(useCase.gmailService, 'getRecentMonthlyReports')
         .mockReturnValue([mockThread]);
-      const getOrCreateFolderSpy = jest.spyOn(useCase.driveService, 'getOrCreateFolderFromPath')
+      const getFolderFromPathSpy = jest.spyOn(useCase.driveService, 'getFolderFromPath')
         .mockReturnValue(mockFolder);
 
       useCase.archive();
@@ -67,7 +67,7 @@ describe('MonthlyReportArchiverUseCase', () => {
       expect(PropertiesService.getScriptProperties().getProperty).toHaveBeenCalledWith('WF_BANK_REPORT_DRIVE');
       expect(getRecentMonthlyReportsSpy).toHaveBeenCalled();
       expect(DriveApp.getFolderById).toHaveBeenCalledWith(mockFolderId);
-      expect(getOrCreateFolderSpy).toHaveBeenCalledWith(
+      expect(getFolderFromPathSpy).toHaveBeenCalledWith(
         'nikaho1/Daily Summary',
         mockBaseFolder
       );
@@ -79,6 +79,25 @@ describe('MonthlyReportArchiverUseCase', () => {
       useCase = new MonthlyReportArchiverUseCase();
 
       expect(() => useCase.archive()).toThrow('Script property WF_BANK_REPORT_DRIVE is not defined');
+    });
+
+    it('フォルダが見つからない場合にエラーをログ出力して続行する', () => {
+      const mockMessage = {
+        getSubject: () => 'site_error 月次日報レポート',
+        getAttachments: () => [{ getContentType: () => 'application/pdf' }],
+      };
+      const mockThread = { getMessages: () => [mockMessage] };
+
+      jest.spyOn(useCase.gmailService, 'getRecentMonthlyReports').mockReturnValue([mockThread]);
+      jest.spyOn(useCase.driveService, 'getFolderFromPath').mockImplementation(() => {
+        throw new Error('Not Found');
+      });
+      const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
+
+      useCase.archive();
+
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Skipping "site_error 月次日報レポート": Not Found'));
+      consoleSpy.mockRestore();
     });
   });
 });

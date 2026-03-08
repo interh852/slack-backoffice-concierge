@@ -34,17 +34,22 @@ class MonthlyReportArchiverUseCase {
 
         const siteName = this.extractSiteName(subject);
         const relativePath = `${siteName}/Daily Summary`;
-        const folder = this.driveService.getOrCreateFolderFromPath(
-          relativePath,
-          baseFolder,
-        );
 
-        for (const attachment of attachments) {
-          // PDFファイルのみを対象にする
-          if (attachment.getContentType() === 'application/pdf') {
-            folder.createFile(attachment);
-            console.log(`Saved: ${attachment.getName()} to ${relativePath}`);
+        try {
+          const folder = this.driveService.getFolderFromPath(
+            relativePath,
+            baseFolder,
+          );
+
+          for (const attachment of attachments) {
+            // PDFファイルのみを対象にする
+            if (attachment.getContentType() === 'application/pdf') {
+              folder.createFile(attachment);
+              console.log(`Saved: ${attachment.getName()} to ${relativePath}`);
+            }
           }
+        } catch (e) {
+          console.error(`Skipping "${subject}": ${e.message}`);
         }
       }
     }
