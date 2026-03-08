@@ -1,19 +1,15 @@
 // 依存関係を Node.js 形式で読み込む
-if (typeof require !== 'undefined') {
-  var { CommuteExpenseUseCase } = require('./CommuteExpenseUseCase');
-  var { MonthlyReportArchiverUseCase } = require('./MonthlyReportArchiverUseCase');
+if (typeof module !== 'undefined') {
+  var _CommuteExpenseUseCase = require('./CommuteExpenseUseCase').CommuteExpenseUseCase;
+  var _MonthlyReportArchiverUseCase = require('./MonthlyReportArchiverUseCase').MonthlyReportArchiverUseCase;
 }
 
 /**
  * 通勤費申請のエントリーポイント
- * @param {Date} baseDate 基準日
- * @param {number} unitPrice 単価
- * @param {string} userName ユーザー名
- * @param {string} userEmail ユーザーメールアドレス
- * @returns {Object} 計算結果
  */
 function applyCommuteExpenses(baseDate, unitPrice, userName, userEmail) {
-  var useCase = new CommuteExpenseUseCase();
+  var UseCase = (typeof _CommuteExpenseUseCase !== 'undefined') ? _CommuteExpenseUseCase : CommuteExpenseUseCase;
+  var useCase = new UseCase();
   return useCase.execute(baseDate, unitPrice, userName, userEmail);
 }
 
@@ -21,7 +17,8 @@ function applyCommuteExpenses(baseDate, unitPrice, userName, userEmail) {
  * 月次レポートをアーカイブするエントリーポイント（トリガー用）
  */
 function archiveMonthlyReports() {
-  var useCase = new MonthlyReportArchiverUseCase();
+  var UseCase = (typeof _MonthlyReportArchiverUseCase !== 'undefined') ? _MonthlyReportArchiverUseCase : MonthlyReportArchiverUseCase;
+  var useCase = new UseCase();
   useCase.archive();
 }
 

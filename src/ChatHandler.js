@@ -1,243 +1,176 @@
-if (typeof require !== 'undefined') {
-  var main = require('./main');
-  var {
-    getSpreadsheetId,
-    CONFIG_SHEET_NAME,
+/**
+ * Google Chatからのメッセージを処理するクラス
+ */
+
+if (typeof module !== 'undefined') {
+  const { GeminiService } = require('./GeminiService');
+  const { SpreadsheetService } = require('./SpreadsheetService');
+  const { CommuteExpenseUseCase } = require('./CommuteExpenseUseCase');
+  const {
     STATE_KEY_PREFIX,
     STATE_WAITING_FOR_AMOUNT,
     STATE_WAITING_FOR_FARE_CONFIRMATION,
+    getSpreadsheetId,
   } = require('./Constants');
-  var { GeminiService } = require('./GeminiService');
-  var { SpreadsheetService } = require('./SpreadsheetService');
 }
 
 /**
- * Google Chatからのメッセージを受信した時のハンドラ
+ * チャットイベントを受け取るメイン関数
+ * @param {Object} event Google Chatからのイベント
+ * @returns {Object} 返信メッセージ
  */
 function onMessage(event) {
-  try {
-    console.log('--- onMessage START ---');
-    var data = extractEventData(event);
-    console.log('User:', data.userName, 'Email:', data.userEmail);
+  console.log('--- onMessage START ---');
+  var user = event.user;
+  console.log('User: ' + user.displayName + ' Email: ' + user.email);
 
-    if (!data.spaceName) return;
+  var messageText = event.message.text;
+  var userEmail = user.email;
 
-    var cache = CacheService.getUserCache();
-    var stateKey = STATE_KEY_PREFIX + data.userEmail;
-    var currentState = cache.get(stateKey);
-    console.log('Current state:', currentState);
+  // 1. ユーザーの状態を取得
+  var userState = getUserState(userEmail);
+  console.log('Current state: ' + userState);
 
-    // 状態がある場合（金額入力待ち、または運賃確認待ち）の処理
-    if (
-      currentState &&
-      (currentState === STATE_WAITING_FOR_AMOUNT ||
-        currentState.indexOf(STATE_WAITING_FOR_FARE_CONFIRMATION) === 0)
-    ) {
-      handleStatefulInteraction(data.text, data, stateKey, cache, currentState);
-      return;
-    }
+  // 状態に応じた処理
+  if (userState && userState.indexOf(STATE_WAITING_FOR_FARE_CONFIRMATION) === 0) {
+    return handleFareConfirmation(event, userState);
+  } else if (userState === STATE_WAITING_FOR_AMOUNT) {
+    return handleAmountInput(event);
+  }
 
-    // Gemini
-    var config = getBotConfig();
-    var apiKey = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
-    var gemini = new GeminiService(apiKey, config.model);
-    var responseText = gemini.generateContent(data.text, config.prompt);
+  // キャンセルコマンドの処理
+  if (messageText.indexOf('キャンセル') !== -1) {
+    clearUserState(userEmail);
+    return { text: '処理を中断しました。' };
+  }
 
-    var result;
-    try {
-      result = parseGeminiResponse(responseText);
-    } catch (e) {
-      // Geminiの応答がJSONでない場合は、そのまま会話として扱う
-      console.warn('Gemini response is not JSON:', responseText);
-      result = { intent: 'other', message: responseText };
-    }
+  // 2. Geminiで意図解析
+  var gemini = new GeminiService();
+  var configId = typeof getSpreadsheetId === 'function' ? getSpreadsheetId() : '';
+  var result = gemini.analyzeIntent(messageText, configId);
 
-    if (result.intent === 'commute') {
-      handleCommuteIntent(result, data, stateKey, cache);
-    } else {
-      sendMessage(result.message, data.spaceName);
-    }
-  } catch (error) {
-    console.error('onMessage error:', error);
-    if (event.space && event.space.name) {
-      sendMessage('❌ エラーが発生しました: ' + error.message, event.space.name);
-    }
+  // 3. 意図に応じた振り分け
+  switch (result.intent) {
+    case 'commute_expense':
+      return handleCommuteIntent(event);
+    case 'set_amount':
+      return handleAmountIntent(event, result.amount);
+    case 'other':
+    default:
+      return { text: result.message || 'すみません、よくわかりませんでした。' };
   }
 }
 
 /**
- * 状態に応じたインタラクションを処理します
+ * 通勤費精算の開始処理
  */
-function handleStatefulInteraction(messageText, data, stateKey, cache, currentState) {
-  if (messageText === 'キャンセル') {
-    cache.remove(stateKey);
-    sendMessage('処理を中断しました。', data.spaceName);
-    return;
+function handleCommuteIntent(event) {
+  var userEmail = event.user.email;
+  var userName = event.user.displayName;
+
+  // 1. 先月の運賃があるか確認
+  var spreadsheetService = new SpreadsheetService();
+  var now = new Date();
+  var lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  var targetMonth = lastMonth.getFullYear() + '-' + (lastMonth.getMonth() + 1).toString().padStart(2, '0');
+
+  console.log('Searching last month fare...');
+  var lastFare = spreadsheetService.getLastMonthFare(targetMonth, userName);
+
+  if (lastFare) {
+    console.log('Fare found: ' + lastFare);
+    setUserState(userEmail, STATE_WAITING_FOR_FARE_CONFIRMATION + '|' + lastFare);
+    return {
+      text: '先月の片道運賃（' + lastFare + '円）を再利用しますか？ 「はい」か「いいえ」で答えてね。',
+    };
   }
 
-  // 運賃確認待ちの場合
-  if (currentState.indexOf(STATE_WAITING_FOR_FARE_CONFIRMATION) === 0) {
-    var lastMonthFare = parseInt(currentState.split('|')[1], 10);
-    if (messageText.indexOf('はい') !== -1) {
-      var commuteResult = executeCommuteExpense(lastMonthFare, data);
-      cache.remove(stateKey);
-      sendMessage(
-        '先月の運賃（片道' + lastMonthFare + '円）で申請しました！\n\n' + commuteResult.text,
-        data.spaceName
-      );
-      return;
-    } else if (messageText.indexOf('いいえ') !== -1) {
-      cache.put(stateKey, STATE_WAITING_FOR_AMOUNT, 600);
-      sendMessage('了解しました。今回の片道運賃を数字だけで教えてください。', data.spaceName);
-      return;
-    } else {
-      sendMessage(
-        '「はい」か「いいえ」で答えてください。（中断する場合は「キャンセル」）',
-        data.spaceName
-      );
-      return;
-    }
-  }
-
-  // 金額入力待ちの場合
-  var numericText = messageText.replace(/[^\d]/g, '');
-  var amount = parseInt(numericText, 10);
-
-  if (isNaN(amount) || numericText === '') {
-    sendMessage('運賃を数字で入力してください。', data.spaceName);
-    return;
-  }
-
-  var res = executeCommuteExpense(amount, data);
-  cache.remove(stateKey);
-  sendMessage('片道' + amount + '円で申請しました！\n\n' + res.text, data.spaceName);
+  // 2. なければ金額入力を促す
+  setUserState(userEmail, STATE_WAITING_FOR_AMOUNT);
+  return { text: '片道運賃（円）を教えてください！' };
 }
 
 /**
- * 通勤費申請の意図を処理します
+ * 運賃再利用の確認処理
  */
-function handleCommuteIntent(result, data, stateKey, cache) {
-  if (result.amount) {
-    var commuteResult = executeCommuteExpense(result.amount, data);
-    sendMessage(result.message + '\n\n' + commuteResult.text, data.spaceName);
+function handleFareConfirmation(event, state) {
+  var text = event.message.text;
+  var userEmail = event.user.email;
+  var userName = event.user.displayName;
+  var lastFare = parseInt(state.split('|')[1]);
+
+  if (text.indexOf('はい') !== -1 || text.indexOf('再利用') !== -1) {
+    clearUserState(userEmail);
+    return executeApplication(userEmail, userName, lastFare);
+  } else if (text.indexOf('いいえ') !== -1) {
+    setUserState(userEmail, STATE_WAITING_FOR_AMOUNT);
+    return { text: '了解です！新しい片道運賃（円）を教えてください。' };
   } else {
-    console.log('Searching last month fare...');
-    var ssService = new SpreadsheetService();
-    var lastMonthFare = ssService.getLastMonthFare(data.userEmail, new Date(), data.userName);
-
-    if (lastMonthFare) {
-      console.log('Fare found:', lastMonthFare);
-      cache.put(stateKey, STATE_WAITING_FOR_FARE_CONFIRMATION + '|' + lastMonthFare, 600);
-      var msg =
-        '先月の精算資料から片道運賃 **' +
-        lastMonthFare +
-        '円** が見つかりました。\nこの運賃を再利用しますか？\n（「はい」または「いいえ」で答えてください）';
-      sendMessage(msg, data.spaceName);
-    } else {
-      cache.put(stateKey, STATE_WAITING_FOR_AMOUNT, 600);
-      sendMessage(result.message, data.spaceName);
-    }
+    return { text: '「はい」か「いいえ」で答えてね！' };
   }
 }
 
 /**
- * チャットにメッセージを送信するヘルパー関数
+ * 金額入力の処理
  */
-function sendMessage(text, spaceName) {
-  try {
-    Chat.Spaces.Messages.create({ text: text }, spaceName);
-  } catch (e) {
-    console.error('Failed to send message:', e);
+function handleAmountInput(event) {
+  var text = event.message.text;
+  var amount = parseInt(text.replace(/[^0-9]/g, ''));
+
+  if (isNaN(amount)) {
+    return { text: '数字で金額を教えてほしいな！' };
   }
+
+  var userEmail = event.user.email;
+  var userName = event.user.displayName;
+  clearUserState(userEmail);
+
+  return executeApplication(userEmail, userName, amount);
 }
 
-function getBotConfig() {
-  var cache = CacheService.getScriptCache();
-  var model = cache.get('GEMINI_MODEL');
-  var prompt = cache.get('GEMINI_PROMPT');
-  if (model && prompt) return { model: model, prompt: prompt };
-
-  var sheetId = PropertiesService.getScriptProperties().getProperty('COMMUTE_EXPENSE_SPREDSHEET');
-  var ss = SpreadsheetApp.openById(sheetId);
-  model = ss.getSheetByName('情報').getRange('B1').getValue();
-  prompt = ss.getSheetByName('通勤費').getRange('B1').getValue();
-  cache.put('GEMINI_MODEL', model, 21600);
-  cache.put('GEMINI_PROMPT', prompt, 21600);
-  return { model: model, prompt: prompt };
-}
-
-function parseGeminiResponse(responseText) {
-  var cleanText = responseText
-    .replace(/```json\s*/g, '')
-    .replace(/```/g, '')
-    .trim();
-  return JSON.parse(cleanText);
-}
-
-function executeCommuteExpense(amount, data) {
-  try {
-    var roundTripAmount = amount * 2;
-    var result =
-      typeof main !== 'undefined' && main.applyCommuteExpenses
-        ? main.applyCommuteExpenses(new Date(), roundTripAmount, data.userName, data.userEmail)
-        : applyCommuteExpenses(new Date(), roundTripAmount, data.userName, data.userEmail);
-
-    var text =
-      '出社日: ' +
-      (result.dates ? result.dates.join(', ') : 'なし') +
-      ' (' +
-      result.daysCount +
-      '日間)\n' +
-      '合計金額: ' +
-      result.totalAmount +
-      '円';
-    if (result.spreadsheetUrl) text += '\n\n精算書: ' + result.spreadsheetUrl;
-    return { text: text };
-  } catch (error) {
-    console.error('executeCommuteExpense error:', error);
-    return { text: '❌ 精算処理中にエラーが発生しました。' };
+/**
+ * 明示的な金額指定の処理
+ */
+function handleAmountIntent(event, amount) {
+  if (!amount) {
+    setUserState(event.user.email, STATE_WAITING_FOR_AMOUNT);
+    return { text: '片道運賃は何円かな？' };
   }
+  return executeApplication(event.user.email, event.user.displayName, amount);
 }
 
-function extractEventData(event) {
-  var text =
-    (event.message && event.message.text) ||
-    (event.chat &&
-      event.chat.messagePayload &&
-      event.chat.messagePayload.message &&
-      event.chat.messagePayload.message.text) ||
-    '';
-  var spaceName =
-    (event.space && event.space.name) ||
-    (event.chat &&
-      event.chat.messagePayload &&
-      event.chat.messagePayload.space &&
-      event.chat.messagePayload.space.name) ||
-    '';
-  var user =
-    event.user ||
-    (event.chat && event.chat.user) ||
-    (event.chat && event.chat.messagePayload && event.chat.messagePayload.user) ||
-    (event.chat &&
-      event.chat.messagePayload &&
-      event.chat.messagePayload.message &&
-      event.chat.messagePayload.message.sender) ||
-    {};
+/**
+ * 実際の精算処理を実行
+ */
+function executeApplication(userEmail, userName, unitPrice) {
+  var useCase = new CommuteExpenseUseCase();
+  var result = useCase.execute(new Date(), unitPrice, userName, userEmail);
+
   return {
-    text: text.trim(),
-    spaceName: spaceName,
-    userEmail: user.email || '',
-    userName: user.displayName || '',
+    text:
+      userName + 'さんの精算を受け付けたよ！✨\n' +
+      '期間中の出社日数: ' + result.daysCount + '日\n' +
+      '合計金額: ' + result.totalAmount + '円\n' +
+      '精算書を作成したよ: ' + result.spreadsheetUrl,
   };
 }
 
-function onAddedToSpace(event) {
-  var data = extractEventData(event);
-  if (data.spaceName) {
-    sendMessage('こんにちは、YV-Botです', data.spaceName);
-  }
+// ユーザー状態管理の簡易実装（PropertiesServiceを使用）
+function getUserState(email) {
+  var prefix = typeof STATE_KEY_PREFIX !== 'undefined' ? STATE_KEY_PREFIX : 'state_';
+  return PropertiesService.getUserProperties().getProperty(prefix + email);
+}
+
+function setUserState(email, state) {
+  var prefix = typeof STATE_KEY_PREFIX !== 'undefined' ? STATE_KEY_PREFIX : 'state_';
+  PropertiesService.getUserProperties().setProperty(prefix + email, state);
+}
+
+function clearUserState(email) {
+  var prefix = typeof STATE_KEY_PREFIX !== 'undefined' ? STATE_KEY_PREFIX : 'state_';
+  PropertiesService.getUserProperties().deleteProperty(prefix + email);
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { onMessage, onAddedToSpace };
+  module.exports = { onMessage };
 }

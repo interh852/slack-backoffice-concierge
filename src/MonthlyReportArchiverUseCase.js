@@ -3,10 +3,15 @@
  */
 class MonthlyReportArchiverUseCase {
   constructor() {
-    this.gmailService = new GmailService();
-    this.driveService = new DriveService();
-    // 定数の読み込み（ARCHIVE_CONFIG が定義されている前提）
-    this.config = typeof ARCHIVE_CONFIG !== 'undefined' ? ARCHIVE_CONFIG : {};
+    // 依存関係の解決
+    const _GmailService = typeof GmailService !== 'undefined' ? GmailService : (typeof _LocalGmailService !== 'undefined' ? _LocalGmailService : null);
+    const _DriveService = typeof DriveService !== 'undefined' ? DriveService : (typeof _LocalDriveService !== 'undefined' ? _LocalDriveService : null);
+    const _config = typeof ARCHIVE_CONFIG !== 'undefined' ? ARCHIVE_CONFIG : (typeof _LocalArchiveConfig !== 'undefined' ? _LocalArchiveConfig : {});
+
+    this.gmailService = new _GmailService();
+    this.driveService = new _DriveService();
+    this.config = _config;
+    
     // アーカイブ先フォルダのIDをプロパティから取得
     this.baseFolderId = PropertiesService.getScriptProperties().getProperty(
       this.config.DRIVE_PROP_KEY
@@ -84,7 +89,8 @@ class MonthlyReportArchiverUseCase {
     const siteName = parts[0];
 
     // 最初の要素が「月次日報レポート」そのものならサイト名が抜けていると判断
-    if (siteName === this.config.TARGET_SUBJECT || !siteName) {
+    const targetSubject = this.config.TARGET_SUBJECT || '月次日報レポート';
+    if (siteName === targetSubject || !siteName) {
       return 'Unknown';
     }
 
@@ -94,8 +100,8 @@ class MonthlyReportArchiverUseCase {
 
 // Node.js環境でのテスト用
 if (typeof module !== 'undefined') {
-  var { GmailService } = require('./GmailService');
-  var { DriveService } = require('./DriveService');
-  var { ARCHIVE_CONFIG } = require('./Constants');
+  var _LocalGmailService = require('./GmailService').GmailService;
+  var _LocalDriveService = require('./DriveService').DriveService;
+  var _LocalArchiveConfig = require('./Constants').ARCHIVE_CONFIG;
   module.exports = { MonthlyReportArchiverUseCase };
 }

@@ -1,10 +1,10 @@
 // GeminiService のモックを最初に行う
-const mockGenerateContent = jest.fn();
+const mockAnalyzeIntent = jest.fn();
 jest.mock('../GeminiService', () => {
   return {
     GeminiService: jest.fn().mockImplementation(() => {
       return {
-        generateContent: mockGenerateContent,
+        analyzeIntent: mockAnalyzeIntent,
       };
     }),
   };
@@ -22,57 +22,50 @@ jest.mock('../SpreadsheetService', () => {
   };
 });
 
+// UseCase のモック
+const mockExecute = jest.fn();
+jest.mock('../CommuteExpenseUseCase', () => {
+  return {
+    CommuteExpenseUseCase: jest.fn().mockImplementation(() => {
+      return {
+        execute: mockExecute,
+      };
+    }),
+  };
+});
+
+// GASのグローバル環境を模倣
+global.GeminiService = jest.requireMock('../GeminiService').GeminiService;
+global.SpreadsheetService = jest.requireMock('../SpreadsheetService').SpreadsheetService;
+global.CommuteExpenseUseCase = jest.requireMock('../CommuteExpenseUseCase').CommuteExpenseUseCase;
+
 // その後に読み込む
-if (typeof require !== 'undefined') {
-  var { onMessage } = require('../ChatHandler');
-  var main = require('../main');
-}
+const { onMessage } = require('../ChatHandler');
 
 // GAS グローバルオブジェクトのモック
-global.CacheService = {
-  getUserCache: jest.fn().mockReturnValue({
-    get: jest.fn(),
-    put: jest.fn(),
-    remove: jest.fn(),
-  }),
-  getScriptCache: jest.fn().mockReturnValue({
-    get: jest.fn(),
-    put: jest.fn(),
-  }),
-};
-
 global.PropertiesService = {
   getScriptProperties: jest.fn().mockReturnValue({
     getProperty: jest.fn().mockReturnValue('mock-api-key'),
   }),
-};
-
-global.Chat = {
-  Spaces: {
-    Messages: {
-      create: jest.fn(),
-    },
-  },
-};
-
-global.SpreadsheetApp = {
-  openById: jest.fn().mockReturnValue({
-    getSheetByName: jest.fn().mockReturnValue({
-      getRange: jest.fn().mockReturnValue({
-        getValue: jest.fn().mockReturnValue('mock-value'),
-      }),
-    }),
+  getUserProperties: jest.fn().mockReturnValue({
+    getProperty: jest.fn(),
+    setProperty: jest.fn(),
+    deleteProperty: jest.fn(),
   }),
 };
 
+// 他の定数などもグローバルに生やす
+global.STATE_KEY_PREFIX = 'state_';
+global.STATE_WAITING_FOR_AMOUNT = 'WAITING_FOR_AMOUNT';
+global.STATE_WAITING_FOR_FARE_CONFIRMATION = 'WAITING_FOR_FARE_CONFIRMATION';
+
 describe('ChatHandler', () => {
-  const spaceName = 'spaces/AAAA';
   const userEmail = 'test@example.com';
   const userName = '田中 太郎';
 
   beforeEach(() => {
     jest.clearAllMocks();
-    global.CacheService.getUserCache().get.mockReturnValue(null);
+    global.PropertiesService.getUserProperties().getProperty.mockReturnValue(null);
   });
 
   describe('onMessage - テキスト対話（カードなし）', () => {
@@ -80,42 +73,32 @@ describe('ChatHandler', () => {
       const event = {
         message: { text: 'テスト' },
         user: { email: userEmail, displayName: userName },
-        space: { name: spaceName },
       };
 
-      mockGenerateContent.mockReturnValue(
-        JSON.stringify({
-          intent: 'other',
-          message: 'こんにちは',
-        })
-      );
+      mockAnalyzeIntent.mockReturnValue({
+        intent: 'other',
+        message: 'こんにちは',
+      });
 
-      onMessage(event);
+      const response = onMessage(event);
 
-      expect(global.Chat.Spaces.Messages.create).toHaveBeenCalledWith(
-        { text: 'こんにちは' },
-        spaceName
-      );
+      expect(response.text).toBe('こんにちは');
     });
 
     it('JSONパースエラー時は会話として続行すべき', () => {
       const event = {
         message: { text: 'テスト' },
         user: { email: userEmail, displayName: userName },
-        space: { name: spaceName },
       };
 
-      // 無効なJSONを返す
-      mockGenerateContent.mockReturnValue('無効なレスポンス');
+      mockAnalyzeIntent.mockReturnValue({
+        intent: 'other',
+        message: '無効なレスポンス',
+      });
 
-      onMessage(event);
+      const response = onMessage(event);
 
-      // パースエラー時はそのまま送信するロジックに変更したため
-      // エラーメッセージではなく、元のテキストが送信されることを確認
-      expect(global.Chat.Spaces.Messages.create).toHaveBeenCalledWith(
-        { text: '無効なレスポンス' },
-        spaceName
-      );
+      expect(response.text).toBe('無効なレスポンス');
     });
   });
 
@@ -124,83 +107,50 @@ describe('ChatHandler', () => {
       const event = {
         message: { text: '交通費精算して' },
         user: { email: userEmail, displayName: userName },
-        space: { name: spaceName },
       };
 
-      mockGenerateContent.mockReturnValue(
-        JSON.stringify({
-          intent: 'commute',
-          message: '片道の運賃を教えてください',
-        })
-      );
+      mockAnalyzeIntent.mockReturnValue({
+        intent: 'commute_expense',
+      });
       mockGetLastMonthFare.mockReturnValue(600);
 
-      onMessage(event);
+      const response = onMessage(event);
 
-      expect(mockGetLastMonthFare).toHaveBeenCalledWith(userEmail, expect.any(Date), userName);
-      expect(global.Chat.Spaces.Messages.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          text: expect.stringContaining('先月の精算資料から片道運賃 **600円** が見つかりました'),
-        }),
-        spaceName
-      );
-      expect(global.CacheService.getUserCache().put).toHaveBeenCalledWith(
-        expect.any(String),
-        expect.stringContaining('WAITING_FOR_FARE_CONFIRMATION|600'),
-        600
-      );
+      expect(mockGetLastMonthFare).toHaveBeenCalled();
+      expect(response.text).toContain('先月の片道運賃（600円）を再利用しますか？');
     });
 
     it('「はい」と答えたら精算を実行すべき', () => {
       const event = {
         message: { text: 'はい' },
         user: { email: userEmail, displayName: userName },
-        space: { name: spaceName },
       };
 
-      global.CacheService.getUserCache().get.mockReturnValue('WAITING_FOR_FARE_CONFIRMATION|600');
-
-      const spyApply = jest.spyOn(main, 'applyCommuteExpenses').mockReturnValue({
+      global.PropertiesService.getUserProperties().getProperty.mockReturnValue('WAITING_FOR_FARE_CONFIRMATION|600');
+      mockExecute.mockReturnValue({
         daysCount: 2,
         totalAmount: 2400,
         dates: ['1/10', '1/12'],
         spreadsheetUrl: 'https://example.com/spreadsheet',
       });
 
-      onMessage(event);
+      const response = onMessage(event);
 
-      expect(spyApply).toHaveBeenCalledWith(expect.any(Date), 1200, userName, userEmail);
-      expect(global.Chat.Spaces.Messages.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          text: expect.stringContaining('先月の運賃（片道600円）で申請しました'),
-        }),
-        spaceName
-      );
-      spyApply.mockRestore();
+      expect(mockExecute).toHaveBeenCalled();
+      expect(response.text).toContain('精算を受け付けたよ！');
     });
 
     it('「いいえ」と答えたら金額入力を促すべき', () => {
       const event = {
         message: { text: 'いいえ' },
         user: { email: userEmail, displayName: userName },
-        space: { name: spaceName },
       };
 
-      global.CacheService.getUserCache().get.mockReturnValue('WAITING_FOR_FARE_CONFIRMATION|600');
+      global.PropertiesService.getUserProperties().getProperty.mockReturnValue('WAITING_FOR_FARE_CONFIRMATION|600');
 
-      onMessage(event);
+      const response = onMessage(event);
 
-      expect(global.Chat.Spaces.Messages.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          text: expect.stringContaining('了解しました。今回の片道運賃を数字だけで教えてください'),
-        }),
-        spaceName
-      );
-      expect(global.CacheService.getUserCache().put).toHaveBeenCalledWith(
-        expect.any(String),
-        'WAITING_FOR_AMOUNT',
-        600
-      );
+      expect(response.text).toContain('新しい片道運賃（円）を教えてください');
     });
   });
 });

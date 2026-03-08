@@ -1,8 +1,8 @@
-if (typeof require !== 'undefined') {
-  var { getSettlementPeriod } = require('./PeriodCalculator');
-  var { CalendarService } = require('./CalendarService');
-  var { SpreadsheetService } = require('./SpreadsheetService');
-  var { COMMUTE_UNIT_PRICE, getTemplateSpreadsheetId } = require('./Constants');
+if (typeof module !== 'undefined') {
+  var _LocalPeriodCalculator = require('./PeriodCalculator');
+  var _LocalCalendarService = require('./CalendarService').CalendarService;
+  var _LocalSpreadsheetService = require('./SpreadsheetService').SpreadsheetService;
+  var _LocalConstants = require('./Constants');
 }
 
 /**
@@ -12,28 +12,29 @@ function CommuteExpenseUseCase() {}
 
 /**
  * 通勤費を計算して保存する
- * @param {Date} baseDate 基準日
- * @param {number} unitPrice 単価（往復分）
- * @param {string} userName ユーザー名
- * @param {string} userEmail ユーザーのメールアドレス (必須)
- * @returns {Object} 計算結果 { daysCount, totalAmount, dates, spreadsheetUrl }
  */
 CommuteExpenseUseCase.prototype.execute = function (baseDate, unitPrice, userName, userEmail) {
   if (!baseDate) baseDate = new Date();
   if (!userEmail) throw new Error('User email is required for commute expense application.');
 
-  // 単価の決定
-  var defaultPrice = typeof COMMUTE_UNIT_PRICE !== 'undefined' ? COMMUTE_UNIT_PRICE : 1000;
-  var currentUnitPrice = typeof unitPrice === 'number' ? unitPrice : defaultPrice;
+  // 依存関係の解決
+  var _getSettlementPeriod = typeof getSettlementPeriod !== 'undefined' ? getSettlementPeriod : _LocalPeriodCalculator.getSettlementPeriod;
+  var _CalendarService = typeof CalendarService !== 'undefined' ? CalendarService : _LocalCalendarService;
+  var _SpreadsheetService = typeof SpreadsheetService !== 'undefined' ? SpreadsheetService : _LocalSpreadsheetService;
+  var _COMMUTE_UNIT_PRICE = typeof COMMUTE_UNIT_PRICE !== 'undefined' ? COMMUTE_UNIT_PRICE : (_LocalConstants ? _LocalConstants.COMMUTE_UNIT_PRICE : 1000);
+  var _getTemplateSpreadsheetId = typeof getTemplateSpreadsheetId === 'function' ? getTemplateSpreadsheetId : (_LocalConstants ? _LocalConstants.getTemplateSpreadsheetId : function() { return ''; });
 
-  // ユーザー名の決定（空の場合はメールアドレスのプレフィックスを使用）
+  // 単価の決定
+  var currentUnitPrice = typeof unitPrice === 'number' ? unitPrice : _COMMUTE_UNIT_PRICE;
+
+  // ユーザー名の決定
   var resolvedUserName = userName || userEmail.split('@')[0];
 
   // 1. 精算期間の計算
-  var period = getSettlementPeriod(baseDate);
+  var period = _getSettlementPeriod(baseDate);
 
   // 2. カレンダーから集計
-  var calendarService = new CalendarService();
+  var calendarService = new _CalendarService();
   var summary = calendarService.getCommuteSummary(period.startDate, period.endDate);
 
   // 3. 金額計算
@@ -43,12 +44,12 @@ CommuteExpenseUseCase.prototype.execute = function (baseDate, unitPrice, userNam
   var targetMonth = period.endDate.getMonth() + 1;
   var targetMonthStr = targetYear + '-' + targetMonth.toString().padStart(2, '0');
 
-  // 4. 保存（テンプレートへの出力のみ）
-  var templateId = typeof getTemplateSpreadsheetId === 'function' ? getTemplateSpreadsheetId() : '';
+  // 4. 保存
+  var templateId = _getTemplateSpreadsheetId();
   var spreadsheetUrl = '';
 
   if (templateId) {
-    var spreadsheetService = new SpreadsheetService();
+    var spreadsheetService = new _SpreadsheetService();
     spreadsheetUrl = spreadsheetService.exportToTemplate(templateId, {
       applicationDate: baseDate,
       userEmail: userEmail,
@@ -59,8 +60,6 @@ CommuteExpenseUseCase.prototype.execute = function (baseDate, unitPrice, userNam
       totalAmount: totalAmount,
       dateList: summary.dates.join(', '),
     });
-  } else {
-    console.warn('Template spreadsheet ID is not defined. No template was created.');
   }
 
   return {
