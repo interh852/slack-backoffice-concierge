@@ -36,6 +36,15 @@ var TEMPLATE_CELLS = {
   DATE_LIST: 'G2',
 };
 
+// 月次レポートアーカイブに関する定数
+var ARCHIVE_CONFIG = {
+  DRIVE_PROP_KEY: 'WF_BANK_REPORT_DRIVE',
+  TARGET_SUBJECT: '月次日報レポート',
+  TARGET_MIME_TYPE: 'application/pdf',
+  TARGET_SUBFOLDER: 'Daily Summary',
+  PROCESSED_LABEL: 'Report_Archived', // 二重処理防止のためのGmailラベル
+};
+
 /**
  * 設定用スプレッドシートIDを取得する
  * @returns {string} スプレッドシートID
@@ -72,6 +81,7 @@ if (typeof module !== 'undefined') {
     CONFIG_SHEET_NAME,
     EXPORT_FOLDER_PATH,
     TEMPLATE_CELLS,
+    ARCHIVE_CONFIG,
     getSpreadsheetId,
     getTemplateSpreadsheetId,
   };

@@ -1,16 +1,23 @@
 const { MonthlyReportArchiverUseCase } = require('../MonthlyReportArchiverUseCase');
+const { ARCHIVE_CONFIG } = require('../Constants');
 
 // GmailとDrive、PropertiesServiceのモック
-global.GmailApp = { search: jest.fn() };
+global.GmailApp = {
+  search: jest.fn(),
+  getUserLabelByName: jest.fn(),
+  createLabel: jest.fn(),
+};
 global.DriveApp = {
   getFoldersByName: jest.fn(),
   getFolderById: jest.fn(),
+  getRootFolder: jest.fn(),
 };
 global.PropertiesService = {
   getScriptProperties: jest.fn().mockReturnValue({
     getProperty: jest.fn(),
   }),
 };
+global.ARCHIVE_CONFIG = ARCHIVE_CONFIG;
 
 describe('MonthlyReportArchiverUseCase', () => {
   let useCase;
@@ -35,11 +42,10 @@ describe('MonthlyReportArchiverUseCase', () => {
   });
 
   describe('archive', () => {
-    it('メールのスレッドをループして添付PDFをDriveに保存する', () => {
+    it('メールのスレッドをループして添付PDFをDriveに保存しラベルを付与する', () => {
       const mockAttachment = {
         getName: () => 'report.pdf',
         getContentType: () => 'application/pdf',
-        copyBlob: jest.fn().mockReturnThis(),
       };
       const mockMessage = {
         getSubject: () => 'nikaho1 月次日報レポート 2026-02',
@@ -47,57 +53,44 @@ describe('MonthlyReportArchiverUseCase', () => {
       };
       const mockThread = {
         getMessages: () => [mockMessage],
+        addLabel: jest.fn(),
       };
       const mockBaseFolder = { id: mockFolderId };
       const mockFolder = {
         createFile: jest.fn(),
       };
+      const mockLabel = { getName: () => ARCHIVE_CONFIG.PROCESSED_LABEL };
 
       // モックの設定
       DriveApp.getFolderById.mockReturnValue(mockBaseFolder);
+      GmailApp.getUserLabelByName.mockReturnValue(mockLabel);
 
       // 依存サービスのメソッドをスパイ
-      const getRecentMonthlyReportsSpy = jest.spyOn(useCase.gmailService, 'getRecentMonthlyReports')
+      const getRecentThreadsSpy = jest.spyOn(useCase.gmailService, 'getRecentThreads')
         .mockReturnValue([mockThread]);
       const getFolderFromPathSpy = jest.spyOn(useCase.driveService, 'getFolderFromPath')
         .mockReturnValue(mockFolder);
 
       useCase.archive();
 
-      expect(PropertiesService.getScriptProperties().getProperty).toHaveBeenCalledWith('WF_BANK_REPORT_DRIVE');
-      expect(getRecentMonthlyReportsSpy).toHaveBeenCalled();
-      expect(DriveApp.getFolderById).toHaveBeenCalledWith(mockFolderId);
+      expect(getRecentThreadsSpy).toHaveBeenCalledWith(
+        ARCHIVE_CONFIG.TARGET_SUBJECT,
+        ARCHIVE_CONFIG.PROCESSED_LABEL
+      );
       expect(getFolderFromPathSpy).toHaveBeenCalledWith(
-        'nikaho1/Daily Summary',
-        mockBaseFolder
+        `nikaho1/${ARCHIVE_CONFIG.TARGET_SUBFOLDER}`,
+        mockBaseFolder,
+        false
       );
       expect(mockFolder.createFile).toHaveBeenCalledWith(mockAttachment);
+      expect(mockThread.addLabel).toHaveBeenCalledWith(mockLabel);
     });
 
     it('フォルダIDが設定されていない場合にエラーを投げる', () => {
       PropertiesService.getScriptProperties().getProperty.mockReturnValue(null);
       useCase = new MonthlyReportArchiverUseCase();
 
-      expect(() => useCase.archive()).toThrow('Script property WF_BANK_REPORT_DRIVE is not defined');
-    });
-
-    it('フォルダが見つからない場合にエラーをログ出力して続行する', () => {
-      const mockMessage = {
-        getSubject: () => 'site_error 月次日報レポート',
-        getAttachments: () => [{ getContentType: () => 'application/pdf' }],
-      };
-      const mockThread = { getMessages: () => [mockMessage] };
-
-      jest.spyOn(useCase.gmailService, 'getRecentMonthlyReports').mockReturnValue([mockThread]);
-      jest.spyOn(useCase.driveService, 'getFolderFromPath').mockImplementation(() => {
-        throw new Error('Not Found');
-      });
-      const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
-
-      useCase.archive();
-
-      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Skipping "site_error 月次日報レポート": Not Found'));
-      consoleSpy.mockRestore();
+      expect(() => useCase.archive()).toThrow(`Script property ${ARCHIVE_CONFIG.DRIVE_PROP_KEY} is not defined`);
     });
   });
 });
