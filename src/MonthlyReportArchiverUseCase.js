@@ -5,15 +5,24 @@ class MonthlyReportArchiverUseCase {
   constructor() {
     this.gmailService = new GmailService();
     this.driveService = new DriveService();
-    this.basePath =
-      '50_風車管理/金融機関報告/アーカイブ（日報・日次レポート・月次レポート）';
+    // アーカイブ（日報・日次レポート・月次レポート）フォルダのIDをプロパティから取得
+    this.baseFolderId = PropertiesService.getScriptProperties().getProperty(
+      'WF_BANK_REPORT_DRIVE',
+    );
   }
 
   /**
    * 過去24時間以内のレポートを抽出して保存する
    */
   archive() {
+    if (!this.baseFolderId) {
+      throw new Error(
+        'Script property WF_BANK_REPORT_DRIVE is not defined. Please set the folder ID.',
+      );
+    }
+
     const threads = this.gmailService.getRecentMonthlyReports();
+    const baseFolder = DriveApp.getFolderById(this.baseFolderId);
 
     for (const thread of threads) {
       const messages = thread.getMessages();
@@ -24,14 +33,17 @@ class MonthlyReportArchiverUseCase {
         if (attachments.length === 0) continue;
 
         const siteName = this.extractSiteName(subject);
-        const folderPath = `${this.basePath}/${siteName}/Daily Summary`;
-        const folder = this.driveService.getOrCreateFolderFromPath(folderPath);
+        const relativePath = `${siteName}/Daily Summary`;
+        const folder = this.driveService.getOrCreateFolderFromPath(
+          relativePath,
+          baseFolder,
+        );
 
         for (const attachment of attachments) {
           // PDFファイルのみを対象にする
           if (attachment.getContentType() === 'application/pdf') {
             folder.createFile(attachment);
-            console.log(`Saved: ${attachment.getName()} to ${folderPath}`);
+            console.log(`Saved: ${attachment.getName()} to ${relativePath}`);
           }
         }
       }
