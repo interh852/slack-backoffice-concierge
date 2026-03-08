@@ -6,11 +6,19 @@ class MonthlyReportArchiverUseCase {
     // 依存関係の解決
     const _GmailService = typeof GmailService !== 'undefined' ? GmailService : (typeof _LocalGmailService !== 'undefined' ? _LocalGmailService : null);
     const _DriveService = typeof DriveService !== 'undefined' ? DriveService : (typeof _LocalDriveService !== 'undefined' ? _LocalDriveService : null);
+    const _SpreadsheetService = typeof SpreadsheetService !== 'undefined' ? SpreadsheetService : (typeof _LocalSpreadsheetService !== 'undefined' ? _LocalSpreadsheetService : null);
     const _config = typeof ARCHIVE_CONFIG !== 'undefined' ? ARCHIVE_CONFIG : (typeof _LocalArchiveConfig !== 'undefined' ? _LocalArchiveConfig : {});
+    const _getSpreadsheetId = typeof getSpreadsheetId === 'function' ? getSpreadsheetId : (typeof _LocalConstants !== 'undefined' ? _LocalConstants.getSpreadsheetId : function() { return ''; });
 
     this.gmailService = new _GmailService();
     this.driveService = new _DriveService();
+    this.spreadsheetService = new _SpreadsheetService();
     this.config = _config;
+    
+    // 設定用スプレッドシートからサイト名のマッピングを取得
+    const ssId = _getSpreadsheetId();
+    this.siteNameMap = this.spreadsheetService.getSiteNameMap(ssId);
+    console.log('サイト名マッピングを読み込みました: ' + JSON.stringify(this.siteNameMap));
     
     // アーカイブ先フォルダのIDをプロパティから取得
     this.baseFolderId = PropertiesService.getScriptProperties().getProperty(
@@ -23,14 +31,19 @@ class MonthlyReportArchiverUseCase {
    */
   archive() {
     if (!this.baseFolderId) {
-      throw new Error(`Script property ${this.config.DRIVE_PROP_KEY} is not defined.`);
+      throw new Error('スクリプトプロパティ ' + this.config.DRIVE_PROP_KEY + ' が設定されていません。');
     }
+
+    console.log('月次日報レポートのアーカイブを開始します...');
 
     // 処理済みラベルを除外して取得
     const threads = this.gmailService.getRecentThreads(
       this.config.TARGET_SUBJECT,
       this.config.PROCESSED_LABEL
     );
+    
+    console.log('対象となる可能性のあるメールスレッド数: ' + threads.length);
+
     const baseFolder = DriveApp.getFolderById(this.baseFolderId);
 
     // 処理済みラベルの取得（存在しなければ作成）
@@ -43,57 +56,68 @@ class MonthlyReportArchiverUseCase {
       const messages = thread.getMessages();
       let isThreadProcessed = false;
 
+      console.log('スレッドをチェック中: ' + messages[0].getSubject());
+
       for (const message of messages) {
         const subject = message.getSubject();
         const attachments = message.getAttachments();
 
         if (attachments.length === 0) continue;
 
-        const siteName = this.extractSiteName(subject);
-        const relativePath = `${siteName}/${this.config.TARGET_SUBFOLDER}`;
+        const rawSiteName = this.extractSiteName(subject);
+        const siteDisplayName = this.siteNameMap[rawSiteName] || rawSiteName;
+        const relativePath = siteDisplayName + '/' + this.config.TARGET_SUBFOLDER;
 
         try {
-          // フォルダが存在しない場合はエラーにする (createIfMissing = false)
           const folder = this.driveService.getFolderFromPath(relativePath, baseFolder, false);
 
           for (const attachment of attachments) {
-            // PDFファイルのみを対象にする
-            if (attachment.getContentType() === this.config.TARGET_MIME_TYPE) {
-              folder.createFile(attachment);
-              console.log(`Saved: ${attachment.getName()} to ${relativePath}`);
+            const fileName = attachment.getName();
+            const contentType = attachment.getContentType();
+            
+            // PDF判定: MIMEタイプがPDF、または拡張子が .pdf の場合
+            const isPdf = contentType === this.config.TARGET_MIME_TYPE || 
+                          (fileName && fileName.toLowerCase().endsWith('.pdf'));
+            
+            if (isPdf) {
+              // octet-stream の場合は PDF として明示的に保存できるように調整
+              let blob = attachment.copyBlob();
+              if (contentType !== 'application/pdf') {
+                blob.setContentType('application/pdf');
+              }
+              
+              folder.createFile(blob);
+              console.log('    - 【成功】ファイルを保存しました: ' + fileName + ' -> ' + relativePath);
               isThreadProcessed = true;
+            } else {
+              console.log('    - 【スキップ】PDFではないため保存しません: ' + fileName + ' (' + contentType + ')');
             }
           }
         } catch (e) {
-          console.error(`Skipping "${subject}": ${e.message}`);
+          console.error('  - 【エラー】' + e.message);
         }
       }
 
-      // スレッド内の処理が少なくとも1つ行われた場合はラベルを付与して次回からスキップ
       if (isThreadProcessed) {
         thread.addLabel(processedLabel);
+        console.log('スレッドを「処理済み」としてマークしました。');
       }
     }
+    
+    console.log('アーカイブ処理が完了しました。');
   }
 
   /**
    * 表題からサイト名を抽出する
-   * @param {string} subject メールの表題
-   * @returns {string} 抽出されたサイト名
    */
   extractSiteName(subject) {
     if (!subject) return 'Unknown';
-
-    // スペースで区切って最初の要素を取得
     const parts = subject.trim().split(/\s+/);
     const siteName = parts[0];
-
-    // 最初の要素が「月次日報レポート」そのものならサイト名が抜けていると判断
     const targetSubject = this.config.TARGET_SUBJECT || '月次日報レポート';
     if (siteName === targetSubject || !siteName) {
       return 'Unknown';
     }
-
     return siteName;
   }
 }
@@ -102,6 +126,8 @@ class MonthlyReportArchiverUseCase {
 if (typeof module !== 'undefined') {
   var _LocalGmailService = require('./GmailService').GmailService;
   var _LocalDriveService = require('./DriveService').DriveService;
+  var _LocalSpreadsheetService = require('./SpreadsheetService').SpreadsheetService;
   var _LocalArchiveConfig = require('./Constants').ARCHIVE_CONFIG;
+  var _LocalConstants = require('./Constants');
   module.exports = { MonthlyReportArchiverUseCase };
 }

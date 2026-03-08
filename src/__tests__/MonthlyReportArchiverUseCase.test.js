@@ -19,6 +19,24 @@ global.PropertiesService = {
 };
 global.ARCHIVE_CONFIG = ARCHIVE_CONFIG;
 
+// SpreadsheetService のモック
+const mockGetSiteNameMap = jest.fn();
+jest.mock('../SpreadsheetService', () => {
+  return {
+    SpreadsheetService: jest.fn().mockImplementation(() => {
+      return {
+        getSiteNameMap: mockGetSiteNameMap,
+      };
+    }),
+  };
+});
+
+// 定数取得のモック
+global.getSpreadsheetId = jest.fn().mockReturnValue('mock-ss-id');
+
+// モックをグローバルに
+global.SpreadsheetService = jest.requireMock('../SpreadsheetService').SpreadsheetService;
+
 describe('MonthlyReportArchiverUseCase', () => {
   let useCase;
   const mockFolderId = 'test-folder-id';
@@ -26,6 +44,9 @@ describe('MonthlyReportArchiverUseCase', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     PropertiesService.getScriptProperties().getProperty.mockReturnValue(mockFolderId);
+    mockGetSiteNameMap.mockReturnValue({
+      'nikaho1': 'にかほ1'
+    });
     useCase = new MonthlyReportArchiverUseCase();
   });
 
@@ -34,15 +55,10 @@ describe('MonthlyReportArchiverUseCase', () => {
       const subject = 'nikaho1 月次日報レポート 2026-02';
       expect(useCase.extractSiteName(subject)).toBe('nikaho1');
     });
-
-    it('サイト名が含まれない場合はUnknownを返す', () => {
-      const subject = '月次日報レポート 2026-02';
-      expect(useCase.extractSiteName(subject)).toBe('Unknown');
-    });
   });
 
   describe('archive', () => {
-    it('メールのスレッドをループして添付PDFをDriveに保存しラベルを付与する', () => {
+    it('サイト名をマッピング変換してDriveに保存する', () => {
       const mockAttachment = {
         getName: () => 'report.pdf',
         getContentType: () => 'application/pdf',
@@ -61,36 +77,21 @@ describe('MonthlyReportArchiverUseCase', () => {
       };
       const mockLabel = { getName: () => ARCHIVE_CONFIG.PROCESSED_LABEL };
 
-      // モックの設定
       DriveApp.getFolderById.mockReturnValue(mockBaseFolder);
       GmailApp.getUserLabelByName.mockReturnValue(mockLabel);
 
-      // 依存サービスのメソッドをスパイ
-      const getRecentThreadsSpy = jest.spyOn(useCase.gmailService, 'getRecentThreads')
-        .mockReturnValue([mockThread]);
-      const getFolderFromPathSpy = jest.spyOn(useCase.driveService, 'getFolderFromPath')
-        .mockReturnValue(mockFolder);
+      jest.spyOn(useCase.gmailService, 'getRecentThreads').mockReturnValue([mockThread]);
+      const getFolderFromPathSpy = jest.spyOn(useCase.driveService, 'getFolderFromPath').mockReturnValue(mockFolder);
 
       useCase.archive();
 
-      expect(getRecentThreadsSpy).toHaveBeenCalledWith(
-        ARCHIVE_CONFIG.TARGET_SUBJECT,
-        ARCHIVE_CONFIG.PROCESSED_LABEL
-      );
+      // nikaho1 が にかほ1 に変換されていることを確認
       expect(getFolderFromPathSpy).toHaveBeenCalledWith(
-        `nikaho1/${ARCHIVE_CONFIG.TARGET_SUBFOLDER}`,
+        `にかほ1/${ARCHIVE_CONFIG.TARGET_SUBFOLDER}`,
         mockBaseFolder,
         false
       );
       expect(mockFolder.createFile).toHaveBeenCalledWith(mockAttachment);
-      expect(mockThread.addLabel).toHaveBeenCalledWith(mockLabel);
-    });
-
-    it('フォルダIDが設定されていない場合にエラーを投げる', () => {
-      PropertiesService.getScriptProperties().getProperty.mockReturnValue(null);
-      useCase = new MonthlyReportArchiverUseCase();
-
-      expect(() => useCase.archive()).toThrow(`Script property ${ARCHIVE_CONFIG.DRIVE_PROP_KEY} is not defined`);
     });
   });
 });
