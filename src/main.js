@@ -1,6 +1,7 @@
 // 依存関係を Node.js 形式で読み込む
 if (typeof require !== 'undefined') {
   var { CommuteExpenseUseCase } = require('./CommuteExpenseUseCase');
+  var { MonthlyReportArchiverUseCase } = require('./MonthlyReportArchiverUseCase');
 }
 
 /**
@@ -16,6 +17,14 @@ function applyCommuteExpenses(baseDate, unitPrice, userName, userEmail) {
   return useCase.execute(baseDate, unitPrice, userName, userEmail);
 }
 
+/**
+ * 月次レポートをアーカイブするエントリーポイント（トリガー用）
+ */
+function archiveMonthlyReports() {
+  var useCase = new MonthlyReportArchiverUseCase();
+  useCase.archive();
+}
+
 if (typeof module !== 'undefined') {
-  module.exports = { applyCommuteExpenses };
+  module.exports = { applyCommuteExpenses, archiveMonthlyReports };
 }
